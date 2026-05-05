@@ -13,7 +13,17 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'pnfb-crm-secret-2026-change-in-prod')
 
 # PostgreSQL en production, SQLite en local
-_db_url = os.environ.get('DATABASE_URL', f"sqlite:///{os.path.join(BASE, 'instance', 'crm.db')}")
+_db_url = os.environ.get('DATABASE_URL', '')
+# Fallback : Railway expose aussi PGHOST/PGUSER/PGPASSWORD/PGDATABASE/PGPORT
+if not _db_url and os.environ.get('PGHOST'):
+    _pg_user = os.environ.get('PGUSER', 'postgres')
+    _pg_pass = os.environ.get('PGPASSWORD', '')
+    _pg_host = os.environ.get('PGHOST', 'localhost')
+    _pg_port = os.environ.get('PGPORT', '5432')
+    _pg_db   = os.environ.get('PGDATABASE', 'railway')
+    _db_url = f"postgresql://{_pg_user}:{_pg_pass}@{_pg_host}:{_pg_port}/{_pg_db}"
+if not _db_url:
+    _db_url = f"sqlite:///{os.path.join(BASE, 'instance', 'crm.db')}"
 if _db_url.startswith('postgres://'):
     _db_url = _db_url.replace('postgres://', 'postgresql://', 1)
 app.config['SQLALCHEMY_DATABASE_URI'] = _db_url
