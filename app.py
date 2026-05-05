@@ -976,33 +976,95 @@ def api_import_contacts():
     f = request.files['file']
     content = f.read().decode('utf-8-sig')
     reader = csv.DictReader(io.StringIO(content))
-    created, errors = 0, []
+    created, skipped, errors = 0, 0, []
+
+    def _get(row, *keys):
+        for k in keys:
+            v = (row.get(k) or '').strip()
+            if v:
+                return v
+        return ''
+
+    def _score_to_priority(score_str):
+        try:
+            s = int(float(score_str))
+            if s >= 5: return 'HIGH'
+            if s >= 3: return 'MEDIUM'
+            return 'LOW'
+        except: return 'MEDIUM'
+
+    def _score_to_segment(score_str):
+        try:
+            s = int(float(score_str))
+            if s >= 5: return 'Strategic'
+            if s >= 4: return 'Quick Win'
+            if s >= 3: return 'Long Term'
+            return 'Dormant'
+        except: return 'Long Term'
+
+    def _score_to_int(score_str):
+        try:
+            s = int(float(score_str))
+            return min(100, s * 20)
+        except: return 50
+
+    existing_companies = {c.company.strip().lower() for c in Contact.query.all()}
+
     for i, row in enumerate(reader):
         try:
-            company = (row.get('company') or row.get('Entreprise') or '').strip()
+            # Support both standard format and Apollo export format
+            company = _get(row, 'company', 'Company Name', 'Entreprise', 'Company')
             if not company:
                 continue
+
+            # Skip duplicates
+            if company.strip().lower() in existing_companies:
+                skipped += 1
+                continue
+
+            # Name: support 'name' or 'First Name'+'Last Name'
+            name = _get(row, 'name', 'Nom')
+            if not name:
+                fn = _get(row, 'First Name', 'Prénom')
+                ln = _get(row, 'Last Name', 'Nom de famille')
+                name = f"{fn} {ln}".strip()
+
+            # Score / segment / priority
+            raw_score = _get(row, 'Score', 'Score_Priorite', 'score')
+            segment  = _get(row, 'segment', 'Segment') or _score_to_segment(raw_score)
+            priority = _get(row, 'priority', 'Priorité') or _score_to_priority(raw_score)
+            score    = _score_to_int(raw_score) if raw_score else 50
+
+            # LinkedIn: support both 'linkedin' and 'LinkedIn URL'
+            linkedin = _get(row, 'linkedin', 'LinkedIn', 'LinkedIn URL')
+
+            # POEI offer / angle
+            poei_offer = _get(row, 'poei_offer', 'POEI', 'Angle', 'Angle_Approche', 'Dispositif')
+
             c = Contact(
                 company=company,
-                name=(row.get('name') or row.get('Nom') or '').strip(),
-                title=(row.get('title') or row.get('Fonction') or '').strip(),
-                sector=(row.get('sector') or row.get('Secteur') or '').strip(),
-                segment=(row.get('segment') or row.get('Segment') or 'Long Term').strip() or 'Long Term',
-                email=(row.get('email') or row.get('Email') or '').strip(),
-                phone=(row.get('phone') or row.get('Téléphone') or '').strip(),
-                linkedin=(row.get('linkedin') or row.get('LinkedIn') or '').strip(),
-                notes=(row.get('notes') or row.get('Notes') or '').strip(),
-                stage=(row.get('stage') or 'Prospect').strip() or 'Prospect',
-                priority=(row.get('priority') or 'MEDIUM').strip() or 'MEDIUM',
-                poei_offer=(row.get('poei_offer') or row.get('POEI') or '').strip(),
-                deal_potential=(row.get('deal_potential') or row.get('Potentiel') or '').strip(),
+                name=name,
+                title=_get(row, 'title', 'Title', 'Fonction', 'Titre'),
+                sector=_get(row, 'sector', 'Secteur', 'Industry'),
+                segment=segment,
+                email=_get(row, 'email', 'Email'),
+                phone=_get(row, 'phone', 'Phone', 'Téléphone'),
+                linkedin=linkedin,
+                notes=_get(row, 'notes', 'Notes'),
+                stage=_get(row, 'stage', 'Stage') or 'Prospect',
+                priority=priority,
+                score=score,
+                poei_offer=poei_offer,
+                deal_potential=_get(row, 'deal_potential', 'Potentiel', 'Deal'),
+                action_type='Email',
             )
             db.session.add(c)
+            existing_companies.add(company.strip().lower())
             created += 1
         except Exception as e:
             errors.append(f'Ligne {i+2}: {str(e)}')
     db.session.commit()
-    return jsonify({'ok': True, 'created': created, 'errors': errors})
+    return jsonify({'ok': True, 'created': created, 'skipped': skipped, 'errors': errors})
 
 
 # ─────────────────────────────────────────── FORECAST
