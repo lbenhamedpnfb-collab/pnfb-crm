@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>PNFB — CRM & Growth Platform 2026</title>
 <link rel="stylesheet" href="/static/css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
 .sb-user{padding:10px 16px;border-top:1px solid #222;display:flex;align-items:center;gap:8px}
 .sb-user-av{width:28px;height:28px;background:var(--ac);border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:800;flex:0 0 28px}
@@ -83,6 +84,10 @@
     <div id="sb-sectors"></div>
 
     <div class="sb-label">Suivi Commercial</div>
+    <div class="sb-item" data-v="tasks" onclick="setView('tasks')">
+      <span class="ic">✅</span><span class="lbl">Tâches & Activités</span>
+      <span class="bdg bdg-r" id="bdg-tasks">—</span>
+    </div>
     <div class="sb-item" data-v="email-suivi" onclick="setView('email-suivi')">
       <span class="ic">📧</span><span class="lbl">Suivi Emails & Relances</span>
       <span class="bdg bdg-r" id="bdg-relances">—</span>
@@ -136,7 +141,11 @@
     <div class="filters" id="filters"></div>
     <div style="display:flex;gap:6px;margin-left:6px;flex-shrink:0">
       <button class="tb-btn" onclick="openContactForm()">➕ Nouveau</button>
+      <button class="tb-btn tb-btn-s" onclick="openImportModal()" title="Importer CSV">⬆ Import</button>
       <button class="tb-btn tb-btn-s" onclick="exportCSV()" title="Exporter CSV">⬇ Export</button>
+      <button class="notif-bell" id="notif-bell" onclick="setView('tasks')" title="Tâches & alertes">
+        🔔<span class="notif-badge" id="notif-count" style="display:none">0</span>
+      </button>
     </div>
   </div>
   <!-- Bulk action bar (hidden by default) -->
@@ -402,6 +411,78 @@
     <button class="btn-del" id="fd-del-btn" onclick="deleteCurrentContact()" style="display:none">🗑 Supprimer</button>
     <button class="btn btn-s" onclick="closeContactForm()" style="margin-left:auto">Annuler</button>
     <button class="btn btn-g" id="fd-save-btn" onclick="saveContact()">💾 Enregistrer</button>
+  </div>
+</div>
+
+<!-- ═══ IMPORT MODAL ══════════════════════════════════════════════════════ -->
+<div id="import-overlay" onclick="closeImportModal(event)" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:900;display:none;align-items:center;justify-content:center">
+  <div id="import-modal" style="background:#fff;border-radius:12px;width:540px;max-width:95vw;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.25)">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
+      <h3 style="font-size:16px;font-weight:800">⬆ Importer des contacts (CSV)</h3>
+      <button onclick="closeImportModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#999">✕</button>
+    </div>
+    <div style="background:#f5f5f3;border-radius:8px;padding:14px;margin-bottom:16px;font-size:12px;color:#666;line-height:1.6">
+      <strong>Colonnes acceptées :</strong> company (obligatoire), name, title, sector, segment, email, phone, linkedin, notes, stage, priority, poei_offer, deal_potential<br>
+      <strong>Séparateur :</strong> virgule · <strong>Encodage :</strong> UTF-8 · <strong>Première ligne :</strong> en-têtes
+    </div>
+    <div id="import-drop-zone" style="border:2px dashed #ddd;border-radius:8px;padding:30px;text-align:center;cursor:pointer;transition:.2s;margin-bottom:16px" onclick="document.getElementById('import-file').click()" ondragover="event.preventDefault();this.style.borderColor='#E8500A'" ondragleave="this.style.borderColor='#ddd'" ondrop="handleImportDrop(event)">
+      <div style="font-size:36px;margin-bottom:8px">📄</div>
+      <div style="font-weight:700;margin-bottom:4px">Glissez votre CSV ici ou cliquez</div>
+      <div style="font-size:12px;color:#999">Fichiers .csv uniquement</div>
+      <input type="file" id="import-file" accept=".csv" style="display:none" onchange="handleImportFile(this)">
+    </div>
+    <div id="import-preview" style="display:none;margin-bottom:16px"></div>
+    <div id="import-result" style="display:none;margin-bottom:16px"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button onclick="closeImportModal()" style="padding:8px 16px;border:1.5px solid #ddd;border-radius:6px;background:#fff;cursor:pointer;font-size:13px">Annuler</button>
+      <button id="import-btn" onclick="doImport()" style="display:none;padding:8px 16px;background:#E8500A;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:700">⬆ Importer</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ TASK FORM MODAL ════════════════════════════════════════════════════ -->
+<div id="task-overlay" onclick="closeTaskForm(event)" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:900;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:12px;width:480px;max-width:95vw;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.25)">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
+      <h3 style="font-size:16px;font-weight:800" id="task-form-title">Nouvelle tâche</h3>
+      <button onclick="closeTaskForm()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#999">✕</button>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div><label style="font-size:10px;color:#999;font-weight:700;display:block;margin-bottom:3px;text-transform:uppercase">Titre *</label>
+        <input id="tf-title" type="text" placeholder="Appeler DRH, Envoyer proposition, Relancer…" style="width:100%;border:1.5px solid #e5e4e0;border-radius:6px;padding:8px 11px;font-size:13px;outline:none">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div><label style="font-size:10px;color:#999;font-weight:700;display:block;margin-bottom:3px;text-transform:uppercase">Type</label>
+          <select id="tf-type" style="width:100%;border:1.5px solid #e5e4e0;border-radius:6px;padding:8px;font-size:13px;background:#fff">
+            <option>📞 Appel</option><option>✉ Email</option><option>📅 RDV</option>
+            <option>🔗 LinkedIn</option><option>📝 Note</option><option>✅ Tâche</option>
+          </select>
+        </div>
+        <div><label style="font-size:10px;color:#999;font-weight:700;display:block;margin-bottom:3px;text-transform:uppercase">Priorité</label>
+          <select id="tf-priority" style="width:100%;border:1.5px solid #e5e4e0;border-radius:6px;padding:8px;font-size:13px;background:#fff">
+            <option value="HIGH">🔴 HIGH</option><option value="MEDIUM" selected>🟡 MEDIUM</option><option value="LOW">🟢 LOW</option>
+          </select>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div><label style="font-size:10px;color:#999;font-weight:700;display:block;margin-bottom:3px;text-transform:uppercase">Échéance</label>
+          <input id="tf-date" type="date" style="width:100%;border:1.5px solid #e5e4e0;border-radius:6px;padding:8px;font-size:13px;background:#fff">
+        </div>
+        <div><label style="font-size:10px;color:#999;font-weight:700;display:block;margin-bottom:3px;text-transform:uppercase">Contact lié</label>
+          <select id="tf-contact" style="width:100%;border:1.5px solid #e5e4e0;border-radius:6px;padding:8px;font-size:13px;background:#fff">
+            <option value="">— Aucun —</option>
+          </select>
+        </div>
+      </div>
+      <div><label style="font-size:10px;color:#999;font-weight:700;display:block;margin-bottom:3px;text-transform:uppercase">Notes</label>
+        <textarea id="tf-notes" rows="2" style="width:100%;border:1.5px solid #e5e4e0;border-radius:6px;padding:8px 11px;font-size:13px;resize:vertical;font-family:inherit" placeholder="Contexte, objectif, rappel…"></textarea>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+      <button onclick="closeTaskForm()" style="padding:8px 16px;border:1.5px solid #ddd;border-radius:6px;background:#fff;cursor:pointer;font-size:13px">Annuler</button>
+      <button onclick="saveTask()" style="padding:8px 16px;background:#E8500A;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:700">💾 Enregistrer</button>
+    </div>
+    <input type="hidden" id="tf-id" value="">
   </div>
 </div>
 

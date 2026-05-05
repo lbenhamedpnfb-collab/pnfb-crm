@@ -150,6 +150,50 @@ class PlanTaskState(db.Model):
     __table_args__ = (db.UniqueConstraint('user_id', 'task_id'),)
 
 
+class Task(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(300), nullable=False)
+    type = db.Column(db.String(50), default='Task')
+    contact_id = db.Column(db.Integer, db.ForeignKey('contact.id'), nullable=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    due_date = db.Column(db.String(20))
+    priority = db.Column(db.String(20), default='MEDIUM')
+    done = db.Column(db.Boolean, default=False)
+    done_at = db.Column(db.DateTime)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    notes = db.Column(db.Text)
+
+    def to_dict(self):
+        contact = Contact.query.get(self.contact_id) if self.contact_id else None
+        return {
+            'id': self.id, 'title': self.title, 'type': self.type or 'Task',
+            'contact_id': self.contact_id,
+            'contact_company': contact.company if contact else '',
+            'contact_name': contact.name if contact else '',
+            'user_id': self.user_id, 'due_date': self.due_date or '',
+            'priority': self.priority or 'MEDIUM', 'done': bool(self.done),
+            'done_at': self.done_at.isoformat() if self.done_at else None,
+            'created_at': self.created_at.isoformat() if self.created_at else '',
+            'notes': self.notes or '',
+        }
+
+
+class EmailTemplate(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(200), nullable=False)
+    category = db.Column(db.String(100))
+    subject = db.Column(db.String(300))
+    body = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            'id': self.id, 'name': self.name, 'category': self.category or '',
+            'subject': self.subject or '', 'body': self.body or '',
+            'created_at': self.created_at.isoformat() if self.created_at else '',
+        }
+
+
 # ─────────────────────────────────────────── AUTH HELPERS
 
 def login_required(f):
@@ -804,6 +848,238 @@ def api_send_email():
         return jsonify({'ok': True})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+# ─────────────────────────────────────────── TASKS API
+
+@app.route('/api/tasks', methods=['GET'])
+@login_required
+def api_tasks():
+    tasks = Task.query.order_by(Task.done.asc(), Task.due_date.asc(), Task.id.desc()).all()
+    return jsonify([t.to_dict() for t in tasks])
+
+@app.route('/api/tasks', methods=['POST'])
+@login_required
+def api_create_task():
+    u = current_user()
+    data = request.get_json()
+    task = Task(
+        title=data.get('title', ''), type=data.get('type', 'Task'),
+        contact_id=data.get('contact_id'), user_id=u.id,
+        due_date=data.get('due_date', ''), priority=data.get('priority', 'MEDIUM'),
+        notes=data.get('notes', ''),
+    )
+    db.session.add(task)
+    db.session.commit()
+    return jsonify(task.to_dict()), 201
+
+@app.route('/api/tasks/<int:tid>', methods=['PATCH'])
+@login_required
+def api_update_task(tid):
+    task = Task.query.get_or_404(tid)
+    data = request.get_json()
+    for field in ['title', 'type', 'due_date', 'priority', 'notes', 'contact_id']:
+        if field in data:
+            setattr(task, field, data[field])
+    if 'done' in data:
+        task.done = bool(data['done'])
+        task.done_at = datetime.utcnow() if task.done else None
+    db.session.commit()
+    return jsonify(task.to_dict())
+
+@app.route('/api/tasks/<int:tid>', methods=['DELETE'])
+@login_required
+def api_delete_task(tid):
+    task = Task.query.get_or_404(tid)
+    db.session.delete(task)
+    db.session.commit()
+    return jsonify({'ok': True})
+
+@app.route('/api/tasks/stats')
+@login_required
+def api_tasks_stats():
+    from datetime import date
+    today_str = date.today().isoformat()
+    total = Task.query.filter_by(done=False).count()
+    overdue = Task.query.filter(Task.due_date < today_str, Task.done == False).count()
+    due_today = Task.query.filter(Task.due_date == today_str, Task.done == False).count()
+    done_week = Task.query.filter(Task.done == True, Task.done_at >= datetime.utcnow().replace(hour=0,minute=0,second=0)).count()
+    return jsonify({'total': total, 'overdue': overdue, 'due_today': due_today, 'done_week': done_week})
+
+
+# ─────────────────────────────────────────── EMAIL TEMPLATES API
+
+@app.route('/api/email/templates', methods=['GET'])
+@login_required
+def api_email_templates_list():
+    templates = EmailTemplate.query.order_by(EmailTemplate.category, EmailTemplate.name).all()
+    return jsonify([t.to_dict() for t in templates])
+
+@app.route('/api/email/templates', methods=['POST'])
+@login_required
+def api_create_email_template():
+    data = request.get_json()
+    t = EmailTemplate(
+        name=data.get('name', 'Nouveau template'),
+        category=data.get('category', 'Prospection'),
+        subject=data.get('subject', ''), body=data.get('body', ''),
+    )
+    db.session.add(t)
+    db.session.commit()
+    return jsonify(t.to_dict()), 201
+
+@app.route('/api/email/templates/<int:tid>', methods=['PATCH'])
+@login_required
+def api_update_email_template(tid):
+    t = EmailTemplate.query.get_or_404(tid)
+    data = request.get_json()
+    for field in ['name', 'category', 'subject', 'body']:
+        if field in data:
+            setattr(t, field, data[field])
+    db.session.commit()
+    return jsonify(t.to_dict())
+
+@app.route('/api/email/templates/<int:tid>', methods=['DELETE'])
+@login_required
+def api_delete_email_template(tid):
+    t = EmailTemplate.query.get_or_404(tid)
+    db.session.delete(t)
+    db.session.commit()
+    return jsonify({'ok': True})
+
+
+# ─────────────────────────────────────────── NOTIFICATIONS
+
+@app.route('/api/notifications')
+@login_required
+def api_notifications():
+    from datetime import date
+    today_str = date.today().isoformat()
+    oc = Contact.query.filter(Contact.next_action_date < today_str, Contact.done == False).count()
+    tc = Contact.query.filter(Contact.next_action_date == today_str, Contact.done == False).count()
+    ot = Task.query.filter(Task.due_date < today_str, Task.done == False).count()
+    tt = Task.query.filter(Task.due_date == today_str, Task.done == False).count()
+    return jsonify({
+        'total': oc + tc + ot + tt,
+        'overdue_contacts': oc, 'today_contacts': tc,
+        'overdue_tasks': ot, 'today_tasks': tt,
+    })
+
+
+# ─────────────────────────────────────────── CSV IMPORT
+
+@app.route('/api/import/contacts', methods=['POST'])
+@login_required
+def api_import_contacts():
+    import csv, io
+    if 'file' not in request.files:
+        return jsonify({'error': 'Pas de fichier'}), 400
+    f = request.files['file']
+    content = f.read().decode('utf-8-sig')
+    reader = csv.DictReader(io.StringIO(content))
+    created, errors = 0, []
+    for i, row in enumerate(reader):
+        try:
+            company = (row.get('company') or row.get('Entreprise') or '').strip()
+            if not company:
+                continue
+            c = Contact(
+                company=company,
+                name=(row.get('name') or row.get('Nom') or '').strip(),
+                title=(row.get('title') or row.get('Fonction') or '').strip(),
+                sector=(row.get('sector') or row.get('Secteur') or '').strip(),
+                segment=(row.get('segment') or row.get('Segment') or 'Long Term').strip() or 'Long Term',
+                email=(row.get('email') or row.get('Email') or '').strip(),
+                phone=(row.get('phone') or row.get('Téléphone') or '').strip(),
+                linkedin=(row.get('linkedin') or row.get('LinkedIn') or '').strip(),
+                notes=(row.get('notes') or row.get('Notes') or '').strip(),
+                stage=(row.get('stage') or 'Prospect').strip() or 'Prospect',
+                priority=(row.get('priority') or 'MEDIUM').strip() or 'MEDIUM',
+                poei_offer=(row.get('poei_offer') or row.get('POEI') or '').strip(),
+                deal_potential=(row.get('deal_potential') or row.get('Potentiel') or '').strip(),
+            )
+            db.session.add(c)
+            created += 1
+        except Exception as e:
+            errors.append(f'Ligne {i+2}: {str(e)}')
+    db.session.commit()
+    return jsonify({'ok': True, 'created': created, 'errors': errors})
+
+
+# ─────────────────────────────────────────── FORECAST
+
+@app.route('/api/forecast')
+@login_required
+def api_forecast():
+    import re
+    PROB = {'Prospect':0.05,'Contacted':0.15,'Meeting':0.35,'Proposal':0.60,'Negotiation':0.80,'Signed':1.0,'Deployed':1.0}
+    REV = 3000
+    def parse_vol(s):
+        m = re.search(r'(\d[\d\s]*)', str(s))
+        return int(m.group(1).replace(' ','')) if m else 0
+    contacts = Contact.query.all()
+    by_stage, by_sector = {}, {}
+    for c in contacts:
+        s = c.stage or 'Prospect'
+        sec = (c.sector or 'Autre').replace('🧹 ','').replace('🏥 ','').replace('🏨 ','').replace('✈️ ','').replace('📦 ','').replace('🍽️ ','').replace('🏗️ ','').replace('👴 ','').replace('💼 ','').replace('🛒 ','').replace('🔷 ','')
+        vol = parse_vol(c.deal_potential)
+        val = vol * REV * PROB.get(s, 0.05)
+        by_stage[s] = by_stage.get(s, 0) + val
+        by_sector[sec] = by_sector.get(sec, 0) + val
+    goals = _load_goals()
+    pipeline_total = sum(by_stage.values())
+    signed_revenue = by_stage.get('Signed', 0) + by_stage.get('Deployed', 0)
+    # Activity last 30 days
+    from datetime import date, timedelta
+    days = {}
+    logs = ContactLog.query.all()
+    today = date.today()
+    for l in logs:
+        if l.date and len(l.date) >= 10:
+            try:
+                d = l.date[:10]
+                if d >= (today - timedelta(days=30)).isoformat():
+                    days[d] = days.get(d, 0) + 1
+            except: pass
+    activity_trend = [{'date': (today - timedelta(days=29-i)).isoformat(),
+                        'count': days.get((today - timedelta(days=29-i)).isoformat(), 0)} for i in range(30)]
+    return jsonify({
+        'pipeline_total': round(pipeline_total),
+        'signed_revenue': round(signed_revenue),
+        'ca_target': int(goals.get('ca_target', 150000)),
+        'by_stage': {k: round(v) for k,v in by_stage.items()},
+        'by_sector': {k: round(v) for k,v in sorted(by_sector.items(), key=lambda x:-x[1])[:8]},
+        'activity_trend': activity_trend,
+    })
+
+
+# ─────────────────────────────────────────── SETTINGS API
+
+@app.route('/api/settings', methods=['GET'])
+@login_required
+def api_get_settings():
+    keys = ['company_name', 'default_sector', 'poei_price', 'currency']
+    result = {}
+    for k in keys:
+        s = Setting.query.filter_by(key=k).first()
+        result[k] = s.value if s else ''
+    result.setdefault('company_name', 'PNFB')
+    result.setdefault('poei_price', '3000')
+    result.setdefault('currency', 'EUR')
+    return jsonify(result)
+
+@app.route('/api/settings', methods=['POST'])
+@login_required
+def api_save_settings():
+    data = request.get_json()
+    ALLOWED = ['company_name', 'default_sector', 'poei_price', 'currency']
+    for k in ALLOWED:
+        if k in data:
+            s = Setting.query.filter_by(key=k).first()
+            if s: s.value = str(data[k])
+            else: db.session.add(Setting(key=k, value=str(data[k])))
+    db.session.commit()
+    return jsonify({'ok': True})
+
 
 # ── Init automatique DB (Railway/Render : appelé au démarrage de gunicorn) ───
 def _auto_setup():

@@ -581,3 +581,83 @@ tr.selected td{background:#FFF0EA}
 .loading-state{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:60px 20px;color:var(--mu)}
 .loading-spinner{width:32px;height:32px;border:3px solid var(--bd);border-top-color:var(--ac);border-radius:50%;animation:spin .7s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
+
+/* ════════════════════════════════ NOTIFICATION BELL */
+.notif-bell{position:relative;background:none;border:1.5px solid var(--bd);border-radius:8px;padding:5px 10px;font-size:16px;cursor:pointer;transition:.12s;display:flex;align-items:center}
+.notif-bell:hover{border-color:var(--ac);background:var(--acl)}
+.notif-badge{position:absolute;top:-6px;right:-6px;background:var(--r);color:#fff;font-size:9px;font-weight:900;padding:2px 5px;border-radius:10px;min-width:16px;text-align:center;line-height:1.2}
+
+/* ════════════════════════════════ TASKS VIEW */
+.tasks-header{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
+.task-kpi{background:var(--w);border:1px solid var(--bd);border-radius:var(--r8);padding:14px 16px;box-shadow:var(--sh)}
+.task-kpi .tk-v{font-size:28px;font-weight:900;line-height:1}
+.task-kpi .tk-l{font-size:10.5px;color:var(--mu);text-transform:uppercase;letter-spacing:.5px;margin-top:4px}
+.task-group{margin-bottom:20px}
+.task-group-label{font-size:11px;font-weight:800;color:var(--mu);text-transform:uppercase;letter-spacing:.6px;padding:8px 0 6px;border-bottom:1px solid var(--bd);margin-bottom:8px;display:flex;align-items:center;justify-content:space-between}
+.task-item{background:var(--w);border:1.5px solid var(--bd);border-radius:var(--r8);padding:11px 14px;display:flex;align-items:center;gap:10px;margin-bottom:6px;transition:.15s;cursor:default}
+.task-item:hover{border-color:#ccc;box-shadow:var(--sh)}
+.task-item.done{opacity:.4;background:#f9f9f9}
+.task-check{width:20px;height:20px;border:2px solid var(--bd);border-radius:50%;flex:0 0 20px;cursor:pointer;transition:.15s;display:flex;align-items:center;justify-content:center}
+.task-check:hover{border-color:var(--g)}
+.task-check.chk{background:var(--g);border-color:var(--g)}
+.task-check.chk::after{content:"✓";color:#fff;font-size:10px;font-weight:900}
+.task-body{flex:1;min-width:0}
+.task-title{font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.task-meta{display:flex;align-items:center;gap:6px;margin-top:3px;flex-wrap:wrap}
+.task-contact{font-size:11px;color:var(--ac);font-weight:600;cursor:pointer}
+.task-contact:hover{text-decoration:underline}
+.task-due{font-size:11px;color:var(--mu)}
+.task-due.overdue{color:var(--r);font-weight:700}
+.task-due.today{color:var(--y);font-weight:700}
+.task-actions{display:flex;gap:4px}
+.task-btn{background:none;border:1px solid var(--bd);border-radius:4px;padding:3px 7px;font-size:11px;cursor:pointer;color:var(--mu);transition:.12s}
+.task-btn:hover{border-color:var(--ac);color:var(--ac)}
+.task-btn.del:hover{border-color:var(--r);color:var(--r)}
+.task-add-btn{background:var(--ac);color:#fff;border:none;border-radius:7px;padding:8px 16px;font-size:12px;font-weight:700;cursor:pointer;transition:.12s}
+.task-add-btn:hover{background:#c94008}
+
+/* ════════════════════════════════ CHART CONTAINERS */
+.chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px}
+.chart-card{background:var(--w);border:1px solid var(--bd);border-radius:var(--r8);padding:16px;box-shadow:var(--sh)}
+.chart-card h3{font-size:11px;font-weight:800;color:var(--mu);text-transform:uppercase;letter-spacing:.6px;margin-bottom:14px}
+.chart-card.full{grid-column:1/-1}
+.chart-wrap{position:relative;height:220px}
+.chart-wrap-sm{position:relative;height:180px}
+
+/* ════════════════════════════════ EMAIL TEMPLATES (DB) */
+.tpl-list{display:flex;flex-direction:column;gap:8px}
+.tpl-item{background:var(--w);border:1.5px solid var(--bd);border-radius:var(--r8);padding:12px 14px;display:flex;align-items:flex-start;gap:10px}
+.tpl-info{flex:1;min-width:0}
+.tpl-name{font-size:13px;font-weight:800}
+.tpl-cat{font-size:10px;color:var(--mu);font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-top:2px}
+.tpl-subj{font-size:12px;color:var(--tx);margin-top:5px;font-style:italic}
+.tpl-actions{display:flex;gap:4px;flex-shrink:0}
+.tpl-btn{background:none;border:1px solid var(--bd);border-radius:5px;padding:4px 10px;font-size:11px;cursor:pointer;color:var(--mu);transition:.12s}
+.tpl-btn:hover{border-color:var(--ac);color:var(--ac)}
+
+/* ════════════════════════════════ GROWTH DASHBOARD (new) */
+.growth-kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:20px}
+.growth-kpi{background:var(--w);border:1px solid var(--bd);border-radius:var(--r8);padding:16px;box-shadow:var(--sh)}
+.growth-kpi .gk-v{font-size:26px;font-weight:900;line-height:1.1}
+.growth-kpi .gk-l{font-size:10px;color:var(--mu);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px}
+.growth-kpi .gk-sub{font-size:11px;color:var(--mu);margin-top:4px}
+.progress-bar-wrap{margin-top:8px;background:var(--bg);border-radius:4px;height:6px;overflow:hidden}
+.progress-bar-fill{height:100%;border-radius:4px;background:var(--ac);transition:.6s}
+.progress-bar-fill.green{background:var(--g)}
+
+/* ════════════════════════════════ SETTINGS (improved) */
+.settings-section{background:var(--w);border:1px solid var(--bd);border-radius:var(--r8);padding:18px 20px;margin-bottom:14px;box-shadow:var(--sh)}
+.settings-section h3{font-size:13px;font-weight:800;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--bd)}
+.user-row{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--bd)}
+.user-row:last-child{border-bottom:none}
+.user-av{width:30px;height:30px;background:var(--ac);border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:800;flex:0 0 30px}
+.user-info{flex:1;min-width:0}
+.user-info .un{font-size:13px;font-weight:700}
+.user-info .ue{font-size:11px;color:var(--mu)}
+.role-badge{font-size:10px;font-weight:800;padding:2px 8px;border-radius:10px;text-transform:uppercase}
+.role-admin{background:var(--acl);color:var(--ac)}
+.role-user{background:var(--bl);color:var(--b)}
+.tb-btn{padding:6px 14px;border:1.5px solid var(--bd);border-radius:var(--r8);background:var(--w);font-size:12px;font-weight:600;cursor:pointer;color:var(--tx);transition:.12s;white-space:nowrap}
+.tb-btn:hover{border-color:var(--ac);color:var(--ac)}
+.tb-btn-s{border-color:var(--bd);color:var(--mu)}
+.tb-btn-s:hover{border-color:var(--mu);color:var(--tx)}
