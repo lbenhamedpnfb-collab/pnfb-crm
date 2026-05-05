@@ -764,8 +764,7 @@ def health():
 @login_required
 def api_send_email():
     if not app.config.get('MAIL_USERNAME'):
-        return jsonify({'error': 'Email non configuré — ajoutez MAIL_USERNAME et MAIL_PASSWORD dans les variables d\'environnement'}), 400
-    from datetime import timedelta, date
+        return jsonify({'error': 'Email non configuré — ajoutez MAIL_USERNAME et MAIL_PASSWORD'}), 400
     d = request.json or {}
     to_addr    = d.get('to', '')
     subject    = d.get('subject', '')
@@ -777,18 +776,34 @@ def api_send_email():
         msg = Message(subject=subject, recipients=[to_addr], body=body)
         mail.send(msg)
         if contact_id:
-            from models_helper import log_action
             c = Contact.query.get(contact_id)
             if c:
-                log = ActionLog(contact_id=contact_id, action_type='Email',
-                                notes=f'Envoi: {subject}', done=True,
-                                action_date=date.today().strftime('%Y-%m-%d'))
-                db.session.add(log)
                 c.last_activity = datetime.utcnow()
                 db.session.commit()
         return jsonify({'ok': True})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+# ── Init automatique DB (Railway/Render : appelé au démarrage de gunicorn) ───
+def _auto_setup():
+    try:
+        db.create_all()
+        if not User.query.filter_by(username='admin').first():
+            pw = bcrypt.generate_password_hash('Admin2026!').decode()
+            db.session.add(User(
+                username='admin',
+                email='admin@groupedefis.fr',
+                password_hash=pw,
+                role='admin'
+            ))
+            db.session.commit()
+            print('✓ Admin créé : admin / Admin2026!')
+        print('✓ Base de données prête')
+    except Exception as e:
+        print(f'⚠ Setup DB: {e}')
+
+with app.app_context():
+    _auto_setup()
 
 if __name__ == '__main__':
     app.run(debug=os.environ.get('FLASK_ENV') != 'production', port=5050)
