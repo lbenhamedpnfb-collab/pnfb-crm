@@ -758,7 +758,18 @@ def api_stats():
 
 @app.route('/health')
 def health():
-    return jsonify({'status':'ok','app':'PNFB CRM','version':'2.0'})
+    try:
+        user_count = User.query.count()
+        db_ok = True
+    except Exception as e:
+        user_count = 0
+        db_ok = False
+    return jsonify({'status':'ok','app':'PNFB CRM','version':'2.0','db':db_ok,'users':user_count})
+
+@app.errorhandler(500)
+def err500(e):
+    import traceback
+    return jsonify({'error': str(e), 'detail': traceback.format_exc()}), 500
 
 @app.route('/api/email/send', methods=['POST'])
 @login_required
