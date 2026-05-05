@@ -40,49 +40,7 @@ async function apiPatch(cid, data) {
 }
 
 // ════════════════════════════════════════════════════════════════ INIT
-async function init() {
-  try {
-    const [contacts, strat, planState] = await Promise.all([
-      apiFetch('/api/contacts'),
-      apiFetch('/api/strategic'),
-      apiFetch('/api/plan/state'),
-    ]);
-    if(!contacts) return;
-    G.contacts = contacts;
-    ALL_TEMPLATES = strat.templates || [];
-    ALL_SCRIPTS   = strat.scripts   || [];
-    ALL_SECTORS   = strat.sectors   || [];
-    ALL_PLAN      = strat.plan      || [];
-    ALL_KPIS      = strat.kpis      || {targets:[]};
-    G.planState   = planState       || {};
-
-    const uname = document.getElementById('sb-username').textContent.trim();
-    document.getElementById('sb-av').textContent = uname.charAt(0).toUpperCase();
-
-    document.getElementById('bdg-tpl').textContent = ALL_TEMPLATES.length;
-    document.getElementById('bdg-scr').textContent = ALL_SCRIPTS.length;
-    document.getElementById('bdg-total').textContent = G.contacts.length;
-    const newCount = G.contacts.filter(c=>c.alert==='🔴 NOUVEAU').length;
-    document.getElementById('bdg-new').textContent = newCount || '0';
-    const partCount = G.contacts.filter(c=>c.segment==='Partner').length;
-    document.getElementById('bdg-part').textContent = partCount || '0';
-    // Load metrics in background
-    apiFetch('/api/metrics').then(m => { G.metrics = m; if(G.view==='growth') render(); });
-
-    const now = new Date();
-    document.getElementById('sb-date').textContent = now.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
-    document.getElementById('d-next-date').value = new Date(Date.now()+3*86400000).toISOString().split('T')[0];
-
-    buildSectorSidebar();
-    updSidebar();
-    buildFilters();
-    render();
-  } catch(e) {
-    console.error('Erreur init:', e);
-  } finally {
-    document.getElementById('loading-screen').style.display = 'none';
-  }
-}
+// init() defined at bottom of file (overrides this via hoisting — see end of file)
 
 function buildSectorSidebar() {
   const secCounts = {};
@@ -239,7 +197,7 @@ function rDashboard() {
     <div class="kpi-card"><div class="kl">Segment Strategic</div><div class="kv" style="color:var(--r)">${G.contacts.filter(c=>c.segment==='Strategic').length}</div><div class="ks">comptes prioritaires</div></div>
     <div class="kpi-card"><div class="kl">Emails valides</div><div class="kv" style="color:var(--g)">${ve}</div><div class="ks">contacts joignables</div></div>
     <div class="kpi-card"><div class="kl">Signés / Déployés</div><div class="kv" style="color:var(--g)">${signed}</div><div class="ks">conventions actives</div></div>
-    <div class="kpi-card"><div class="kl">Score moyen</div><div class="kv">${Math.round(G.contacts.reduce((s,c)=>s+c.score,0)/G.contacts.length)}</div><div class="ks">sur 100 pts</div></div>
+    <div class="kpi-card"><div class="kl">Score moyen</div><div class="kv">${G.contacts.length?Math.round(G.contacts.reduce((s,c)=>s+c.score,0)/G.contacts.length):0}</div><div class="ks">sur 100 pts</div></div>
   </div>`;
 
   h += '<div class="dash-cols"><div class="dash-actions">';
@@ -698,7 +656,7 @@ function rMetrics() {
     <div class="met-card"><div class="ml">Priorité HIGH</div><div class="mv" style="color:var(--ac)">${hp}</div><div class="ms">contacts</div></div>
     <div class="met-card"><div class="ml">Emails valides</div><div class="mv" style="color:var(--g)">${ve}</div><div class="ms">joignables</div></div>
     <div class="met-card"><div class="ml">Signés</div><div class="mv" style="color:var(--g)">${si}</div><div class="ms">conventions</div></div>
-    <div class="met-card"><div class="ml">Score moyen</div><div class="mv">${Math.round(G.contacts.reduce((s,c)=>s+c.score,0)/tot)}</div><div class="ms">/ 100 pts</div></div>
+    <div class="met-card"><div class="ml">Score moyen</div><div class="mv">${tot?Math.round(G.contacts.reduce((s,c)=>s+c.score,0)/tot):0}</div><div class="ms">/ 100 pts</div></div>
   </div>`;
   const segC={};G.contacts.forEach(c=>{segC[c.segment]=(segC[c.segment]||0)+1;});
   const mxS=Math.max(...Object.values(segC));
@@ -1870,7 +1828,25 @@ function rSettings() {
       <button class="tb-btn" onclick="exportCSV()">⬇ Exporter tous les contacts (CSV)</button>
       <button class="tb-btn tb-btn-s" onclick="exportCSV('strategic')">⬇ Exporter Strategic seulement</button>
     </div>
-  </div>`;
+  </div>
+  ${G.contacts.length===0?`<div class="settings-section" style="border:2px dashed var(--ac);background:var(--acl)">
+    <h3 style="color:var(--ac)">🚀 Démarrage rapide — Charger des données de démonstration</h3>
+    <p style="font-size:13px;color:var(--mu);margin-bottom:12px">La base de données est vide. Chargez 10 contacts de démonstration pour explorer toutes les fonctionnalités du CRM.</p>
+    <button class="tb-btn" style="background:var(--ac);color:#fff;font-size:13px;padding:10px 20px" onclick="seedDemo()">🎯 Charger les données de démo (10 contacts)</button>
+  </div>`:''}`;
+
+}
+
+async function seedDemo() {
+  if(!confirm('Charger 10 contacts de démonstration ? Cette action ne peut pas être annulée si la base est non-vide.')) return;
+  const r = await apiFetch('/api/seed/demo', {method:'POST'});
+  if(r?.ok) {
+    toast(r.message || '10 contacts créés !', 'success');
+    const contacts = await apiFetch('/api/contacts');
+    if(contacts) { G.contacts = contacts; updSidebar(); buildSectorSidebar(); render(); }
+  } else {
+    toast(r?.error || 'Erreur lors du seed', 'error');
+  }
 }
 
 async function loadUsers() {
@@ -2972,6 +2948,14 @@ async function init() {
     render();
     updateNotifBadge();
     setInterval(updateNotifBadge, 60000);
+    // Pre-load metrics in background for instant Growth Dashboard
+    apiFetch('/api/metrics').then(m => { G.metrics = m; });
+    // Pre-load relances badge
+    apiFetch('/api/emails/suivi').then(d => {
+      if(!d) return;
+      const bdg = document.getElementById('bdg-relances');
+      if(bdg) { const due = d.stats?.relances_dues || 0; bdg.textContent = due > 0 ? due : (d.stats?.total || 0); }
+    });
   } catch(e) {
     console.error('Erreur init:', e);
   } finally {

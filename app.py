@@ -1114,6 +1114,105 @@ def api_forecast():
     })
 
 
+# ─────────────────────────────────────────── DEMO SEED
+
+@app.route('/api/seed/demo', methods=['POST'])
+@login_required
+def api_seed_demo():
+    u = current_user()
+    if u.role != 'admin':
+        return jsonify({'error': 'Admin requis'}), 403
+    if Contact.query.count() > 0:
+        return jsonify({'error': 'Des contacts existent déjà. Videz la base avant de seeder.'}), 409
+    from datetime import date, timedelta
+    today = date.today().isoformat()
+    demo = [
+        dict(company='Groupe Elior', name='Marie Dupont', title='DRH', sector='🍽️ Restauration',
+             segment='Strategic', stage='Proposal', priority='HIGH', score=82,
+             email='m.dupont@elior.com', email_status='valid', phone='+33 6 12 34 56 78',
+             decision_maker=True, poei_offer='POEI cuisine collective — 25 postes',
+             active_offers='Cuisinier·ère de collectivité', deal_potential='25 stagiaires',
+             action_type='Relance', next_action='Relancer sur proposition POEI envoyée',
+             next_action_date=(date.today() - timedelta(days=2)).isoformat(),
+             alert='', linkedin='https://linkedin.com/in/mariedupont', notes='Très intéressée, attend validation DG'),
+        dict(company='Onet Services', name='Thomas Bernard', title='Directeur Formation', sector='🧹 Propreté/FM',
+             segment='Strategic', stage='Meeting', priority='HIGH', score=77,
+             email='t.bernard@onet.fr', email_status='valid', phone='+33 6 87 65 43 21',
+             decision_maker=True, poei_offer='POEI Agent de service 20 postes Ile-de-France',
+             active_offers='Agent propreté', deal_potential='20 stagiaires',
+             action_type='RDV', next_action='RDV de présentation du dispositif POEI',
+             next_action_date=today, alert='', linkedin='', notes='Premier contact LinkedIn, très réactif'),
+        dict(company='Vinci Construction', name='Laure Martin', title='RRH Île-de-France', sector='🏗️ BTP',
+             segment='Quick Win', stage='Contacted', priority='HIGH', score=65,
+             email='l.martin@vinci.com', email_status='valid', phone='+33 6 55 44 33 22',
+             decision_maker=False, poei_offer='POEI Conducteur de travaux — 10 postes',
+             active_offers='Conducteur travaux', deal_potential='10 stagiaires',
+             action_type='Relance', next_action='Relancer J+7 après email de présentation',
+             next_action_date=(date.today() + timedelta(days=2)).isoformat(),
+             alert='🔴 NOUVEAU', linkedin='', notes='Email envoyé le 28/04'),
+        dict(company='Sodexo France', name='Pierre Legrand', title='Directeur RH Opérations', sector='🍽️ Restauration',
+             segment='Strategic', stage='Negotiation', priority='HIGH', score=91,
+             email='p.legrand@sodexo.com', email_status='valid', phone='+33 6 11 22 33 44',
+             decision_maker=True, poei_offer='POEI Agent de restauration collective — 40 postes',
+             active_offers='Agent restauration', deal_potential='40 stagiaires',
+             action_type='RDV', next_action='Réunion tripartite SODEXO / PNFB / France Travail',
+             next_action_date=(date.today() + timedelta(days=5)).isoformat(),
+             alert='', linkedin='https://linkedin.com/in/pierrelegrand', notes='Convention en cours de signature'),
+        dict(company='Accor Hotels', name='Sophie Chen', title='DRH Hôtels France', sector='🏨 Hôtellerie',
+             segment='Quick Win', stage='Proposal', priority='HIGH', score=73,
+             email='s.chen@accor.com', email_status='valid', phone='+33 6 99 88 77 66',
+             decision_maker=True, poei_offer='POEI Réceptionniste / Femme de chambre — 15 postes',
+             active_offers='Réceptionniste, Femme de chambre', deal_potential='15 stagiaires',
+             action_type='Relance', next_action='Relance après envoi proposition',
+             next_action_date=(date.today() - timedelta(days=1)).isoformat(),
+             alert='', linkedin='', notes='Budget formation validé pour T2 2026'),
+        dict(company='Chronopost', name='Julien Moreau', title='Resp. Recrutement', sector='📦 Logistique',
+             segment='Long Term', stage='Contacted', priority='MEDIUM', score=48,
+             email='j.moreau@chronopost.fr', email_status='unknown', phone='',
+             decision_maker=False, poei_offer='POEI Agent de tri — 30 postes saisonniers',
+             active_offers='Agent de tri postal', deal_potential='30 stagiaires',
+             action_type='Appel', next_action='Appel de découverte besoin recrutement',
+             next_action_date=(date.today() + timedelta(days=7)).isoformat(),
+             alert='🔴 NOUVEAU', linkedin='', notes='Contact LinkedIn — pas encore appelé'),
+        dict(company='Korian Groupe', name='Isabelle Roux', title='DRH Groupe', sector='👴 Services Personne',
+             segment='Strategic', stage='Signed', priority='HIGH', score=95,
+             email='i.roux@korian.com', email_status='valid', phone='+33 6 44 55 66 77',
+             decision_maker=True, poei_offer='POEI Aide-soignant(e) — 35 postes signés',
+             active_offers='Aide-soignant·e', deal_potential='35 stagiaires',
+             action_type='Note', next_action='Suivi démarrage promotion Juin 2026',
+             next_action_date=(date.today() + timedelta(days=30)).isoformat(),
+             alert='', linkedin='', notes='Convention signée le 15/04/2026 — démarrage juin'),
+        dict(company='ADP France', name='Marc Fontaine', title='Directeur Agence Paris', sector='💼 Intérim/RH',
+             segment='Partner', stage='Meeting', priority='MEDIUM', score=60,
+             email='m.fontaine@adp.com', email_status='valid', phone='+33 6 77 88 99 00',
+             decision_maker=True, poei_offer='Partenariat co-développement POEI multi-secteurs',
+             active_offers='Partenariat prescripteur', deal_potential='50+ stagiaires/an',
+             action_type='RDV', next_action='RDV partenariat — présenter le modèle PNFB',
+             next_action_date=(date.today() + timedelta(days=3)).isoformat(),
+             alert='', linkedin='https://linkedin.com/in/marcfontaine', notes='Partenaire potentiel pour pipeline prospects'),
+        dict(company='Clinique du Sport Paris', name='Anne Durand', title='Directrice des soins', sector='🏥 Santé',
+             segment='Quick Win', stage='Prospect', priority='MEDIUM', score=42,
+             email='a.durand@clinique-sport.fr', email_status='unknown', phone='',
+             decision_maker=False, poei_offer='POEI Agent de service hospitalier — 8 postes',
+             active_offers='ASH', deal_potential='8 stagiaires',
+             action_type='Email', next_action='Envoyer email de prospection POEI santé',
+             next_action_date=today, alert='🔴 NOUVEAU', linkedin='', notes=''),
+        dict(company='Air France Services', name='Nicolas Petit', title='DRH Opérations', sector='✈️ Aéroportuaire',
+             segment='Long Term', stage='Prospect', priority='LOW', score=35,
+             email='n.petit@airfrance.fr', email_status='unknown', phone='',
+             decision_maker=False, poei_offer='POEI Agent d\'escale / Manutentionnaire — 20 postes',
+             active_offers='Agent escale', deal_potential='20 stagiaires',
+             action_type='LinkedIn', next_action='Connexion LinkedIn + message de présentation',
+             next_action_date=(date.today() + timedelta(days=14)).isoformat(),
+             alert='', linkedin='', notes='À prospecter sur le prochain salon emploi aéroportuaire'),
+    ]
+    for d in demo:
+        c = Contact(**d)
+        db.session.add(c)
+    db.session.commit()
+    return jsonify({'ok': True, 'created': len(demo), 'message': f'{len(demo)} contacts de démonstration créés !'})
+
+
 # ─────────────────────────────────────────── SETTINGS API
 
 @app.route('/api/settings', methods=['GET'])
