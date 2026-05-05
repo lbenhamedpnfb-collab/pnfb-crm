@@ -309,13 +309,17 @@ def api_contacts():
     contacts = Contact.query.all()
     return jsonify([c.to_dict() for c in contacts])
 
+def _norm_sector(s):
+    """Strip U+FE0F variation selector and whitespace to avoid duplicates."""
+    return (s or '').replace('️', '').strip()
+
 @app.route('/api/contacts', methods=['POST'])
 @login_required
 def api_create_contact():
     data = request.get_json()
     c = Contact(
         company=data.get('company',''), name=data.get('name',''),
-        title=data.get('title',''), sector=data.get('sector',''),
+        title=data.get('title',''), sector=_norm_sector(data.get('sector','')),
         segment=data.get('segment','Long Term'), stage=data.get('stage','Prospect'),
         priority=data.get('priority','MEDIUM'), score=int(data.get('score',50)),
         email=data.get('email',''), email_status=data.get('email_status','unknown'),
@@ -396,7 +400,8 @@ def api_update_contact(cid):
                  'linkedin','notes']
     for field in UPDATABLE:
         if field in data:
-            setattr(c, field, data[field])
+            val = _norm_sector(data[field]) if field == 'sector' else data[field]
+            setattr(c, field, val)
     if '_done' in data:
         c.done = bool(data['_done'])
     db.session.commit()
@@ -1045,7 +1050,7 @@ def api_import_contacts():
                 company=company,
                 name=name,
                 title=_get(row, 'title', 'Title', 'Fonction', 'Titre'),
-                sector=_get(row, 'sector', 'Secteur', 'Industry'),
+                sector=_norm_sector(_get(row, 'sector', 'Secteur', 'Industry')),
                 segment=segment,
                 email=_get(row, 'email', 'Email'),
                 phone=_get(row, 'phone', 'Phone', 'Téléphone'),

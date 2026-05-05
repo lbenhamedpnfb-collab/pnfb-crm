@@ -43,22 +43,44 @@ async function apiPatch(cid, data) {
 // init() defined at bottom of file (overrides this via hoisting — see end of file)
 
 function buildSectorSidebar() {
-  const secCounts = {};
-  G.contacts.forEach(c => { secCounts[c.sector] = (secCounts[c.sector]||0)+1; });
+  // Aggregate counts — normalize key (trim + strip variation selectors) to avoid duplicates
+  const rawCounts = {};
+  G.contacts.forEach(c => {
+    const s = (c.sector || '').replace(/️/g,'').trim();
+    if(s) rawCounts[s] = (rawCounts[s]||0)+1;
+  });
+
+  // Map normalized keys back to canonical SECTOR_COLORS key if possible
+  const canonMap = {}; // normalized → canonical SECTOR_COLORS key
+  Object.keys(SECTOR_COLORS).forEach(k => { canonMap[k.replace(/️/g,'').trim()] = k; });
+
+  // Merge counts under canonical keys
+  const secCounts = {}; // canonical key → count
+  Object.entries(rawCounts).forEach(([norm, cnt]) => {
+    const canon = canonMap[norm] || norm; // use canonical if known, else keep as-is
+    secCounts[canon] = (secCounts[canon]||0) + cnt;
+  });
+
   const container = document.getElementById('sb-sectors');
+  const rendered = new Set();
   let h = '';
+
+  // Known sectors in order
   Object.entries(SECTOR_COLORS).forEach(([sec, col]) => {
     const cnt = secCounts[sec] || 0;
     if(!cnt) return;
+    rendered.add(sec);
     h += `<div class="sb-item" data-v="sector" onclick="setView('sector','${esc(sec)}')">
       <div class="sec-dot" style="background:${col}"></div>
       <span class="lbl">${esc(sec)}</span>
       <span class="bdg bdg-mu">${cnt}</span>
     </div>`;
   });
-  // Autres secteurs
-  const otherSecs = Object.keys(secCounts).filter(s => !SECTOR_COLORS[s] && secCounts[s]);
-  otherSecs.forEach(sec => {
+
+  // Unknown sectors (not in SECTOR_COLORS) — deduplicated
+  Object.keys(secCounts).forEach(sec => {
+    if(rendered.has(sec) || !secCounts[sec]) return;
+    rendered.add(sec);
     h += `<div class="sb-item" data-v="sector" onclick="setView('sector','${esc(sec)}')">
       <div class="sec-dot" style="background:#888"></div>
       <span class="lbl">${esc(sec)}</span>
@@ -171,8 +193,17 @@ function scoreTag(n) {
   const cls = n>=80?'s-hi':n>=60?'s-mi':'';
   return `<span class="score ${cls}">${n}/100</span>`;
 }
+function normSec(s) {
+  // Normalize sector: strip variation-selector-16 (U+FE0F) and trim
+  return (s || '').replace(/️/g, '').trim();
+}
 function secColor(sec) {
-  return SECTOR_COLORS[sec] || '#888';
+  if(!sec) return '#888';
+  if(SECTOR_COLORS[sec]) return SECTOR_COLORS[sec];
+  // Fallback: try normalized comparison
+  const norm = normSec(sec);
+  const match = Object.keys(SECTOR_COLORS).find(k => normSec(k) === norm);
+  return match ? SECTOR_COLORS[match] : '#888';
 }
 function quickBtns(c, stop=true) {
   const sp = stop ? 'event.stopPropagation();' : '';
@@ -220,7 +251,10 @@ function rDashboard() {
   h += '</div>';
   h += '<div class="dash-side-card"><h3>Par Secteur</h3>';
   const secCounts = {};
-  G.contacts.forEach(c=>{ secCounts[c.sector]=(secCounts[c.sector]||0)+1; });
+  G.contacts.forEach(c=>{
+    const s = normSec(c.sector);
+    if(s) secCounts[s]=(secCounts[s]||0)+1;
+  });
   const secSorted = Object.entries(secCounts).sort((a,b)=>b[1]-a[1]);
   const maxSec = Math.max(...secSorted.map(x=>x[1]),1);
   secSorted.forEach(([sec,cnt]) => {
