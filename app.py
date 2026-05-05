@@ -7,7 +7,7 @@ from flask_mail import Mail, Message
 from functools import wraps
 
 BASE = os.path.dirname(__file__)
-STATIC_DATA = os.path.join(BASE, 'instance', 'strategic_data.json')
+STATIC_DATA = os.path.join(BASE, 'strategic_data.json')
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'pnfb-crm-secret-2026-change-in-prod')
