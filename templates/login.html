@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PNFB CRM — Connexion</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#111;display:flex;align-items:center;justify-content:center;height:100vh}
+.card{background:#fff;border-radius:16px;padding:40px 36px;width:360px;box-shadow:0 20px 60px rgba(0,0,0,.4)}
+.logo{width:48px;height:48px;background:#E8500A;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;margin-bottom:20px}
+h1{font-size:22px;font-weight:900;letter-spacing:-.5px;margin-bottom:4px}
+.sub{color:#888;font-size:13px;margin-bottom:28px}
+label{display:block;font-size:11.5px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:.6px;margin-bottom:5px}
+input{width:100%;border:1.5px solid #e0e0e0;border-radius:8px;padding:10px 13px;font-size:14px;outline:none;transition:.15s;margin-bottom:16px}
+input:focus{border-color:#E8500A}
+.btn{width:100%;background:#E8500A;color:#fff;border:none;border-radius:8px;padding:12px;font-size:14px;font-weight:700;cursor:pointer;transition:.15s}
+.btn:hover{background:#c94008}
+.err{background:#FCE8E6;color:#c00;border-radius:8px;padding:10px 13px;font-size:13px;margin-bottom:14px;display:none}
+.loading{opacity:.6;pointer-events:none}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">🎯</div>
+  <h1>PNFB CRM</h1>
+  <p class="sub">Connexion à votre espace prospection</p>
+  <div class="err" id="err"></div>
+  <div>
+    <label>Identifiant</label>
+    <input type="text" id="username" placeholder="admin" autocomplete="username">
+    <label>Mot de passe</label>
+    <input type="password" id="password" placeholder="••••••••" autocomplete="current-password">
+    <button class="btn" id="btn" onclick="doLogin()">Se connecter</button>
+  </div>
+</div>
+<script>
+document.addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
+async function doLogin() {
+  const u = document.getElementById('username').value.trim();
+  const p = document.getElementById('password').value;
+  const err = document.getElementById('err');
+  const btn = document.getElementById('btn');
+  if(!u || !p) { showErr('Remplissez tous les champs'); return; }
+  btn.classList.add('loading');
+  btn.textContent = 'Connexion…';
+  err.style.display = 'none';
+  try {
+    const r = await fetch('/auth/login', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({username: u, password: p})
+    });
+    const data = await r.json();
+    if(r.ok) { window.location.href = '/'; }
+    else { showErr(data.error || 'Erreur de connexion'); }
+  } catch(e) { showErr('Erreur réseau'); }
+  btn.classList.remove('loading');
+  btn.textContent = 'Se connecter';
+}
+function showErr(msg) {
+  const err = document.getElementById('err');
+  err.textContent = msg;
+  err.style.display = 'block';
+}
+</script>
+</body>
+</html>
