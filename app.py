@@ -313,13 +313,74 @@ def _norm_sector(s):
     """Strip U+FE0F variation selector and whitespace to avoid duplicates."""
     return (s or '').replace('️', '').strip()
 
+# Canonical sector map — maps plain/partial names to emoji keys
+_SECTOR_CANON = {
+    'propreté': '🧹 Propreté/FM',
+    'proprete': '🧹 Propreté/FM',
+    'propreté/fm': '🧹 Propreté/FM',
+    'fm': '🧹 Propreté/FM',
+    'restauration': '🍽️ Restauration',
+    'btp': '🏗️ BTP',
+    'batiment': '🏗️ BTP',
+    'bâtiment': '🏗️ BTP',
+    'construction': '🏗️ BTP',
+    'logistique': '📦 Logistique',
+    'transport': '📦 Logistique',
+    'services personne': '👴 Services Personne',
+    'services à la personne': '👴 Services Personne',
+    'services a la personne': '👴 Services Personne',
+    'aide à domicile': '👴 Services Personne',
+    'aide a domicile': '👴 Services Personne',
+    'sap': '👴 Services Personne',
+    'intérim': '💼 Intérim/RH',
+    'interim': '💼 Intérim/RH',
+    'intérim/rh': '💼 Intérim/RH',
+    'rh': '💼 Intérim/RH',
+    'santé': '🏥 Santé',
+    'sante': '🏥 Santé',
+    'médical': '🏥 Santé',
+    'medical': '🏥 Santé',
+    'hôtellerie': '🏨 Hôtellerie',
+    'hotellerie': '🏨 Hôtellerie',
+    'hotel': '🏨 Hôtellerie',
+    'aéroportuaire': '✈️ Aéroportuaire',
+    'aeroportuaire': '✈️ Aéroportuaire',
+    'aéroport': '✈️ Aéroportuaire',
+    'aeroport': '✈️ Aéroportuaire',
+    'commerce': '🛒 Commerce',
+    'retail': '🛒 Commerce',
+    'distribution': '🛒 Commerce',
+}
+_CANONICAL_SECTORS = {
+    '🧹 Propreté/FM', '🏗️ BTP', '🍽️ Restauration', '📦 Logistique',
+    '👴 Services Personne', '💼 Intérim/RH', '🏥 Santé', '🏨 Hôtellerie',
+    '✈️ Aéroportuaire', '🛒 Commerce', '🔷 Autre'
+}
+
+def _canonicalize_sector(s):
+    if not s:
+        return s
+    s = _norm_sector(s)
+    if s in _CANONICAL_SECTORS:
+        return s
+    key = s.lower().strip()
+    if key in _SECTOR_CANON:
+        return _SECTOR_CANON[key]
+    # Keyword matching: check if any canonical key word appears
+    for alias, canon in _SECTOR_CANON.items():
+        words = [w for w in alias.split() if len(w) > 2]
+        key_words = [w for w in key.split() if len(w) > 2]
+        if words and key_words and any(w in key_words or any(kw in w or w in kw for kw in key_words) for w in words):
+            return canon
+    return s
+
 @app.route('/api/contacts', methods=['POST'])
 @login_required
 def api_create_contact():
     data = request.get_json()
     c = Contact(
         company=data.get('company',''), name=data.get('name',''),
-        title=data.get('title',''), sector=_norm_sector(data.get('sector','')),
+        title=data.get('title',''), sector=_canonicalize_sector(data.get('sector','')),
         segment=data.get('segment','Long Term'), stage=data.get('stage','Prospect'),
         priority=data.get('priority','MEDIUM'), score=int(data.get('score',50)),
         email=data.get('email',''), email_status=data.get('email_status','unknown'),
@@ -400,7 +461,7 @@ def api_update_contact(cid):
                  'linkedin','notes']
     for field in UPDATABLE:
         if field in data:
-            val = _norm_sector(data[field]) if field == 'sector' else data[field]
+            val = _canonicalize_sector(data[field]) if field == 'sector' else data[field]
             setattr(c, field, val)
     if '_done' in data:
         c.done = bool(data['_done'])
@@ -1050,7 +1111,7 @@ def api_import_contacts():
                 company=company,
                 name=name,
                 title=_get(row, 'title', 'Title', 'Fonction', 'Titre'),
-                sector=_norm_sector(_get(row, 'sector', 'Secteur', 'Industry')),
+                sector=_canonicalize_sector(_get(row, 'sector', 'Secteur', 'Industry')),
                 segment=segment,
                 email=_get(row, 'email', 'Email'),
                 phone=_get(row, 'phone', 'Phone', 'Téléphone'),
@@ -1117,6 +1178,25 @@ def api_forecast():
         'by_sector': {k: round(v) for k,v in sorted(by_sector.items(), key=lambda x:-x[1])[:8]},
         'activity_trend': activity_trend,
     })
+
+
+# ─────────────────────────────────────────── NORMALIZE SECTORS
+
+@app.route('/api/admin/normalize-sectors', methods=['POST'])
+@login_required
+def api_normalize_sectors():
+    u = current_user()
+    if u.role != 'admin':
+        return jsonify({'error': 'Admin requis'}), 403
+    contacts = Contact.query.all()
+    fixed = 0
+    for c in contacts:
+        canon = _canonicalize_sector(c.sector)
+        if canon != c.sector:
+            c.sector = canon
+            fixed += 1
+    db.session.commit()
+    return jsonify({'ok': True, 'fixed': fixed, 'total': len(contacts)})
 
 
 # ─────────────────────────────────────────── DEMO SEED

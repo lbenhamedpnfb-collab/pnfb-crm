@@ -43,29 +43,18 @@ async function apiPatch(cid, data) {
 // init() defined at bottom of file (overrides this via hoisting — see end of file)
 
 function buildSectorSidebar() {
-  // Aggregate counts — normalize key (trim + strip variation selectors) to avoid duplicates
-  const rawCounts = {};
+  // Aggregate counts using canonical sector names to merge variants
+  const secCounts = {};
   G.contacts.forEach(c => {
-    const s = (c.sector || '').replace(/️/g,'').trim();
-    if(s) rawCounts[s] = (rawCounts[s]||0)+1;
-  });
-
-  // Map normalized keys back to canonical SECTOR_COLORS key if possible
-  const canonMap = {}; // normalized → canonical SECTOR_COLORS key
-  Object.keys(SECTOR_COLORS).forEach(k => { canonMap[k.replace(/️/g,'').trim()] = k; });
-
-  // Merge counts under canonical keys
-  const secCounts = {}; // canonical key → count
-  Object.entries(rawCounts).forEach(([norm, cnt]) => {
-    const canon = canonMap[norm] || norm; // use canonical if known, else keep as-is
-    secCounts[canon] = (secCounts[canon]||0) + cnt;
+    const canon = canonSec(c.sector);
+    if(canon) secCounts[canon] = (secCounts[canon]||0)+1;
   });
 
   const container = document.getElementById('sb-sectors');
   const rendered = new Set();
   let h = '';
 
-  // Known sectors in order
+  // Known sectors in fixed order
   Object.entries(SECTOR_COLORS).forEach(([sec, col]) => {
     const cnt = secCounts[sec] || 0;
     if(!cnt) return;
@@ -77,7 +66,7 @@ function buildSectorSidebar() {
     </div>`;
   });
 
-  // Unknown sectors (not in SECTOR_COLORS) — deduplicated
+  // Truly unknown sectors (not matched by canonSec)
   Object.keys(secCounts).forEach(sec => {
     if(rendered.has(sec) || !secCounts[sec]) return;
     rendered.add(sec);
@@ -194,16 +183,34 @@ function scoreTag(n) {
   return `<span class="score ${cls}">${n}/100</span>`;
 }
 function normSec(s) {
-  // Normalize sector: strip variation-selector-16 (U+FE0F) and trim
   return (s || '').replace(/️/g, '').trim();
 }
+
+// Map any sector string (with or without emoji) to the canonical SECTOR_COLORS key
+function canonSec(rawSec) {
+  if(!rawSec) return '';
+  if(SECTOR_COLORS[rawSec]) return rawSec; // already canonical
+  // Strip all emoji + variation selectors + punctuation, lowercase
+  const strip = s => s
+    .replace(/[\u{1F000}-\u{1FFFF}\u{2600}-\u{27FF}\u{FE00}-\u{FEFF}]/gu, '')
+    .replace(/️/g,'').trim().toLowerCase();
+  const plain = strip(rawSec);
+  if(!plain) return rawSec;
+  for(const k of Object.keys(SECTOR_COLORS)) {
+    const kPlain = strip(k);
+    if(kPlain === plain) return k; // exact match after stripping
+    // Keyword overlap: split on spaces/slashes, keep words >2 chars
+    const kW = kPlain.split(/[\s\/,&À-àÈ-è]+/).filter(w=>w.length>2);
+    const pW = plain.split(/[\s\/,&à-à]+/).filter(w=>w.length>2);
+    if(kW.length && pW.length && kW.some(w => pW.some(pw => pw.includes(w) || w.includes(pw)))) return k;
+  }
+  return rawSec; // unknown sector — keep as-is
+}
+
 function secColor(sec) {
   if(!sec) return '#888';
-  if(SECTOR_COLORS[sec]) return SECTOR_COLORS[sec];
-  // Fallback: try normalized comparison
-  const norm = normSec(sec);
-  const match = Object.keys(SECTOR_COLORS).find(k => normSec(k) === norm);
-  return match ? SECTOR_COLORS[match] : '#888';
+  const canon = canonSec(sec);
+  return SECTOR_COLORS[canon] || '#888';
 }
 function quickBtns(c, stop=true) {
   const sp = stop ? 'event.stopPropagation();' : '';
@@ -252,7 +259,7 @@ function rDashboard() {
   h += '<div class="dash-side-card"><h3>Par Secteur</h3>';
   const secCounts = {};
   G.contacts.forEach(c=>{
-    const s = normSec(c.sector);
+    const s = canonSec(c.sector);
     if(s) secCounts[s]=(secCounts[s]||0)+1;
   });
   const secSorted = Object.entries(secCounts).sort((a,b)=>b[1]-a[1]);
@@ -1861,6 +1868,7 @@ function rSettings() {
     <div style="display:flex;gap:10px;flex-wrap:wrap">
       <button class="tb-btn" onclick="exportCSV()">⬇ Exporter tous les contacts (CSV)</button>
       <button class="tb-btn tb-btn-s" onclick="exportCSV('strategic')">⬇ Exporter Strategic seulement</button>
+      <button class="tb-btn tb-btn-s" onclick="normalizeSectors()" title="Corrige les noms de secteurs sans emoji (ex: BTP → 🏗️ BTP)">🔧 Normaliser les secteurs</button>
     </div>
   </div>
   ${G.contacts.length===0?`<div class="settings-section" style="border:2px dashed var(--ac);background:var(--acl)">
@@ -1869,6 +1877,19 @@ function rSettings() {
     <button class="tb-btn" style="background:var(--ac);color:#fff;font-size:13px;padding:10px 20px" onclick="seedDemo()">🎯 Charger les données de démo (10 contacts)</button>
   </div>`:''}`;
 
+}
+
+async function normalizeSectors() {
+  const r = await apiFetch('/api/admin/normalize-sectors', {method:'POST'});
+  if(r?.ok) {
+    toast(`✓ ${r.fixed} secteur(s) corrigé(s) sur ${r.total} contacts`, 'success');
+    if(r.fixed > 0) {
+      const contacts = await apiFetch('/api/contacts');
+      if(contacts) { G.contacts = contacts; updSidebar(); buildSectorSidebar(); render(); }
+    }
+  } else {
+    toast(r?.error || 'Erreur', 'error');
+  }
 }
 
 async function seedDemo() {
