@@ -1133,6 +1133,69 @@ def api_import_contacts():
     return jsonify({'ok': True, 'created': created, 'skipped': skipped, 'errors': errors})
 
 
+# ─────────────────────────────────────────── BATCH IMPORT (Excel → JSON)
+
+@app.route('/api/batch-import', methods=['POST'])
+@login_required
+def api_batch_import():
+    data = request.json
+    if isinstance(data, dict):
+        data = data.get('contacts', [])
+    if not isinstance(data, list):
+        return jsonify({'error': 'Payload doit être une liste JSON'}), 400
+
+    existing = {
+        (c.company or '').strip().lower() + '||' + (c.name or '').strip().lower()
+        for c in Contact.query.all()
+    }
+
+    created, skipped, errors = 0, 0, []
+    for i, d in enumerate(data):
+        try:
+            company = (d.get('company') or '').strip()
+            if not company:
+                continue
+            name = (d.get('name') or '').strip()
+            key = company.lower() + '||' + name.lower()
+            if key in existing:
+                skipped += 1
+                continue
+
+            dm_val = d.get('decision_maker', False)
+            if isinstance(dm_val, str):
+                dm_val = dm_val.strip().lower() in ('yes', 'oui', 'true', '1')
+
+            c = Contact(
+                company=company, name=name,
+                title=(d.get('title') or '').strip(),
+                sector=_canonicalize_sector((d.get('sector') or '').strip()),
+                segment=(d.get('segment') or 'Long Term').strip(),
+                stage=(d.get('stage') or 'Prospect').strip(),
+                priority=(d.get('priority') or 'MEDIUM').strip().upper(),
+                score=int(d.get('score') or 0),
+                email=(d.get('email') or '').strip(),
+                email_status=(d.get('email_status') or '').strip(),
+                phone=(d.get('phone') or '').strip(),
+                decision_maker=dm_val,
+                poei_offer=(d.get('poei_offer') or '').strip(),
+                active_offers=(d.get('active_offers') or '').strip(),
+                next_action=(d.get('next_action') or '').strip(),
+                next_action_date=(d.get('next_action_date') or '').strip(),
+                action_type=(d.get('action_type') or 'Email').strip(),
+                deal_potential=(d.get('deal_potential') or '').strip(),
+                alert=(d.get('alert') or '').strip(),
+                linkedin=(d.get('linkedin') or '').strip(),
+                notes=(d.get('notes') or '').strip(),
+            )
+            db.session.add(c)
+            existing.add(key)
+            created += 1
+        except Exception as e:
+            errors.append(f'Contact {i} ({d.get("company","?")}): {str(e)}')
+    db.session.commit()
+    return jsonify({'ok': True, 'created': created, 'skipped': skipped, 'errors': errors[:20]})
+
+
 # ─────────────────────────────────────────── FORECAST
 
 @app.route('/api/forecast')
