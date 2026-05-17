@@ -169,17 +169,21 @@
 <!-- ═══ MAIN ══════════════════════════════════════════════════════════════ -->
 <main id="main">
   <div id="topbar">
-    <h2 id="view-title">Growth Dashboard</h2>
-    <div class="tb-sep"></div>
-    <input type="text" id="search" placeholder="Rechercher…" oninput="onSearch(this.value)">
-    <div class="filters" id="filters"></div>
-    <div style="display:flex;gap:6px;margin-left:6px;flex-shrink:0">
-      <button class="tb-btn" onclick="openContactForm()">➕ Nouveau</button>
-      <button class="tb-btn tb-btn-s" onclick="openImportModal()" title="Importer CSV">⬆ Import</button>
-      <button class="tb-btn tb-btn-s" onclick="exportCSV()" title="Exporter CSV">⬇ Export</button>
-      <button class="notif-bell" id="notif-bell" onclick="setView('tasks')" title="Tâches & alertes">
-        🔔<span class="notif-badge" id="notif-count" style="display:none">0</span>
-      </button>
+    <div class="tb-top">
+      <h2 id="view-title">Mission Control</h2>
+      <div class="tb-sep"></div>
+      <div style="display:flex;gap:6px;align-items:center;margin-left:auto;flex-shrink:0">
+        <button class="tb-btn" onclick="openContactForm()">➕ Nouveau</button>
+        <button class="tb-btn tb-btn-s" onclick="openImportModal()" title="Importer CSV">⬆ Import</button>
+        <button class="tb-btn tb-btn-s" onclick="exportCSV()" title="Exporter CSV">⬇ Export</button>
+        <button class="notif-bell" id="notif-bell" onclick="setView('tasks')" title="Tâches & alertes">
+          🔔<span class="notif-badge" id="notif-count" style="display:none">0</span>
+        </button>
+      </div>
+    </div>
+    <div class="tb-bottom">
+      <input type="text" id="search" placeholder="Rechercher…" oninput="onSearch(this.value)">
+      <div class="filters" id="filters"></div>
     </div>
   </div>
   <!-- Bulk action bar (hidden by default) -->

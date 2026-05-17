@@ -127,16 +127,42 @@ function setView(v, sector) {
 // ════════════════════════════════════════════════════════════════ FILTERS
 function buildFilters() {
   const fr = document.getElementById('filters');
-  const segs = ['Strategic','Quick Win','Partner','Long Term','Dormant'];
   let h = '';
-  segs.forEach(s => { h += `<button class="fb" data-fk="seg" data-fv="${s}" onclick="tF('seg','${s}')">${s}</button>`; });
-  ['HIGH','MEDIUM','LOW'].forEach(p => { h += `<button class="fb" data-fk="pri" data-fv="${p}" onclick="tF('pri','${p}')">${p}</button>`; });
+
+  h += `<div class="filter-group"><span class="fg-label">Segment</span>`;
+  ['Strategic','Quick Win','Partner','Long Term','Dormant'].forEach(s => {
+    h += `<button class="fb" data-fk="seg" data-fv="${s}" onclick="tF('seg','${s}')">${s}</button>`;
+  });
+  h += `</div>`;
+
+  h += `<div class="fg-sep"></div>`;
+
+  h += `<div class="filter-group"><span class="fg-label">Qualité</span>`;
   h += `<button class="fb" data-fk="dm" data-fv="1" onclick="tF('dm','1')" title="Décideur identifié">👤 Décideur</button>`;
-  h += `<button class="fb" data-fk="reachable" data-fv="email" onclick="tF('reachable','email')" title="Email valide">✉ Email OK</button>`;
+  h += `<button class="fb" data-fk="reachable" data-fv="email" onclick="tF('reachable','email')" title="Email valide">✉ Email</button>`;
   h += `<button class="fb" data-fk="reachable" data-fv="phone" onclick="tF('reachable','phone')" title="Téléphone renseigné">📞 Tel</button>`;
-  h += `<button class="fb" data-fk="activity" data-fv="stale" onclick="tF('activity','stale')" style="border-color:#F5A623;color:#F5A623" title="Sans activité depuis +45j">⚠ Inactif 45j+</button>`;
-  h += `<button class="fb" data-fk="new" data-fv="1" onclick="tF('new','1')" style="border-color:#E8500A;color:#E8500A">🔴 Nouveaux</button>`;
+  h += `</div>`;
+
+  h += `<div class="fg-sep"></div>`;
+
+  h += `<div class="filter-group"><span class="fg-label">Activité</span>`;
+  ['HIGH','MEDIUM','LOW'].forEach(p => {
+    h += `<button class="fb" data-fk="pri" data-fv="${p}" onclick="tF('pri','${p}')">${p}</button>`;
+  });
+  h += `<button class="fb" data-fk="activity" data-fv="stale" onclick="tF('activity','stale')" title="Sans activité depuis +45j">⚠ Inactif 45j+</button>`;
+  h += `<button class="fb" data-fk="new" data-fv="1" onclick="tF('new','1')">🔴 Nouveaux</button>`;
+  h += `</div>`;
+
+  h += `<div class="fg-sep"></div>`;
+  h += `<button class="fb-reset" onclick="resetFilters()">↺ Réinitialiser</button>`;
+
   fr.innerHTML = h;
+}
+function resetFilters() {
+  G.filters = {seg:'',pri:'',at:'',new:'',dm:'',reachable:'',activity:''};
+  G.page = 1;
+  document.querySelectorAll('.fb').forEach(b => b.classList.remove('on'));
+  render();
 }
 function tF(k,v) {
   G.filters[k] = G.filters[k]===v ? '' : v;
@@ -473,6 +499,15 @@ async function reactivateContact(id) {
 }
 
 // ════════════════════════════════════════════════════════════════ DASHBOARD
+function kpiCard(icon, label, value, sub, color) {
+  return `<div class="kpi-card" style="--kpi-color:${color}">
+    <div class="kpi-icon" style="background:${color}1a">${icon}</div>
+    <div class="kl">${label}</div>
+    <div class="kv" style="color:${color}">${value}</div>
+    <div class="ks">${sub}</div>
+  </div>`;
+}
+
 function rDashboard() {
   const td = today();
   const list = applyF(G.contacts);
@@ -480,14 +515,15 @@ function rDashboard() {
   const tl = list.filter(c=>isTd(c,td)).sort((a,b)=>segO(a)-segO(b)||b.score-a.score);
   const signed = G.contacts.filter(c=>c.stage==='Signed'||c.stage==='Deployed').length;
   const ve = G.contacts.filter(c=>c.email_status==='valid'||c.email_status==='Verified').length;
+  const avgScore = G.contacts.length ? Math.round(G.contacts.reduce((s,c)=>s+c.score,0)/G.contacts.length) : 0;
 
   let h = `<div class="dash-grid">
-    <div class="kpi-card"><div class="kl">Actions en retard</div><div class="kv" style="color:var(--r)">${ov.length}</div><div class="ks">${tl.length} pour aujourd'hui</div></div>
-    <div class="kpi-card"><div class="kl">Contacts total</div><div class="kv">${G.contacts.length}</div><div class="ks">sur ${new Set(G.contacts.map(c=>c.company)).size} entreprises</div></div>
-    <div class="kpi-card"><div class="kl">Segment Strategic</div><div class="kv" style="color:var(--r)">${G.contacts.filter(c=>c.segment==='Strategic').length}</div><div class="ks">comptes prioritaires</div></div>
-    <div class="kpi-card"><div class="kl">Emails valides</div><div class="kv" style="color:var(--g)">${ve}</div><div class="ks">contacts joignables</div></div>
-    <div class="kpi-card"><div class="kl">Signés / Déployés</div><div class="kv" style="color:var(--g)">${signed}</div><div class="ks">conventions actives</div></div>
-    <div class="kpi-card"><div class="kl">Score moyen</div><div class="kv">${G.contacts.length?Math.round(G.contacts.reduce((s,c)=>s+c.score,0)/G.contacts.length):0}</div><div class="ks">sur 100 pts</div></div>
+    ${kpiCard('🎯', 'Actions en retard', ov.length, `${tl.length} pour aujourd'hui`, 'var(--r)')}
+    ${kpiCard('👥', 'Contacts total', G.contacts.length, `sur ${new Set(G.contacts.map(c=>c.company)).size} entreprises`, 'var(--b)')}
+    ${kpiCard('⭐', 'Segment Strategic', G.contacts.filter(c=>c.segment==='Strategic').length, 'comptes prioritaires', 'var(--ac)')}
+    ${kpiCard('✉️', 'Emails valides', ve, 'contacts joignables', 'var(--g)')}
+    ${kpiCard('✅', 'Signés / Déployés', signed, 'conventions actives', 'var(--g)')}
+    ${kpiCard('📊', 'Score moyen', avgScore, 'sur 100 pts', avgScore>=60?'var(--g)':avgScore>=40?'var(--y)':'var(--r)')}
   </div>`;
 
   h += '<div class="dash-cols"><div class="dash-actions">';
@@ -1347,17 +1383,20 @@ function rMissionControl(d) {
   h += `</div>`;
 
   // ── OBJECTIFS MODIFIABLES ────────────────────────────────────────
-  h += `<div class="mc-panel" style="background:var(--tx);border-color:rgba(255,255,255,.1)">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-      <div class="mc-panel-title" style="margin:0;color:rgba(255,255,255,.45)">⚙️ Objectifs hebdomadaires</div>
-      <button onclick="saveMissionTargets()" style="background:#E8500A;color:#fff;border:none;border-radius:5px;padding:4px 10px;font-size:11px;cursor:pointer">Sauvegarder</button>
+  h += `<div class="mc-panel" style="background:linear-gradient(135deg,#0F1729,#1E293B);border-color:rgba(255,255,255,.08)">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div>
+        <div class="mc-panel-title" style="margin:0;color:rgba(255,255,255,.5)">⚙️ Objectifs hebdomadaires</div>
+        <div style="font-size:11px;color:rgba(255,255,255,.3);margin-top:3px">Cibles de cadence commerciale</div>
+      </div>
+      <button onclick="saveMissionTargets()" style="background:var(--ac);color:#fff;border:none;border-radius:7px;padding:6px 14px;font-size:11.5px;font-weight:700;cursor:pointer;transition:.12s">💾 Sauvegarder</button>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px">
       ${['emails','appels','rdv','relances'].map(k=>`
-        <div>
-          <label style="font-size:10px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.5px">${{emails:'✉️ Emails',appels:'📞 Appels',rdv:'📅 RDV',relances:'🔄 Relances'}[k]}</label>
+        <div style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:12px">
+          <label style="font-size:10px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:6px">${{emails:'✉️ Emails',appels:'📞 Appels',rdv:'📅 RDV',relances:'🔄 Relances'}[k]}</label>
           <input type="number" id="tgt-${k}" value="${targets[k]}" min="0" max="100"
-            style="width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.18);border-radius:5px;padding:6px 8px;color:#fff;font-size:13px;font-weight:700;margin-top:3px">
+            style="width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:7px 9px;color:#fff;font-size:15px;font-weight:900;font-family:inherit">
         </div>`).join('')}
     </div>
   </div>`;
