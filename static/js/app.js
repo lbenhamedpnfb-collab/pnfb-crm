@@ -30,8 +30,11 @@ let ALL_PLAN      = [];
 let ALL_KPIS      = {targets:[]};
 
 // ════════════════════════════════════════════════════════════════ API HELPERS
+const _csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
 async function apiFetch(url, opts={}) {
-  const r = await fetch(url, {headers:{'Content-Type':'application/json'}, ...opts});
+  const method = (opts.method || 'GET').toUpperCase();
+  const headers = {'Content-Type':'application/json', ...(method !== 'GET' ? {'X-CSRFToken': _csrfToken} : {})};
+  const r = await fetch(url, {headers, ...opts});
   if(r.status === 401) { window.location.href='/login'; return null; }
   return r.json();
 }
@@ -278,7 +281,13 @@ function quickBtns(c, stop=true) {
 
 // ════════════════════════════════════════════════════════════════ QUICK WINS
 
+function skeletonRows(n=5) {
+  const row = '<tr>' + '<td><div style="height:14px;background:#f0f0f0;border-radius:4px;animation:skeleton-pulse 1.4s ease infinite"></div></td>'.repeat(5) + '</tr>';
+  return `<style>@keyframes skeleton-pulse{0%,100%{opacity:1}50%{opacity:.4}}</style><div class="tbl-wrap"><table><tbody>${row.repeat(n)}</tbody></table></div>`;
+}
+
 async function loadQuickWins() {
+  document.getElementById('content').innerHTML = `<div class="view-header"><h2>⚡ Quick Wins</h2></div>${skeletonRows()}`;
   const data = await apiFetch('/api/contacts/quick-wins');
   if(!data) return;
   document.getElementById('content').innerHTML = rQuickWins(data);
@@ -330,6 +339,7 @@ function rQuickWins(list) {
 // ════════════════════════════════════════════════════════════════ ENRICHISSEMENT
 
 async function loadEnrich() {
+  document.getElementById('content').innerHTML = `<div class="view-header"><h2>⚙ Contacts à enrichir</h2></div>${skeletonRows()}`;
   const data = await apiFetch('/api/contacts/to-enrich');
   if(!data) return;
   document.getElementById('content').innerHTML = rEnrich(data);
@@ -366,6 +376,7 @@ function rEnrich(list) {
 // ════════════════════════════════════════════════════════════════ DOUBLONS
 
 async function loadDuplicates() {
+  document.getElementById('content').innerHTML = `<div class="view-header"><h2>🔁 Doublons à traiter</h2></div>${skeletonRows(3)}`;
   const data = await apiFetch('/api/contacts/duplicates');
   if(!data) return;
   document.getElementById('content').innerHTML = rDuplicates(data);
@@ -405,6 +416,7 @@ function rDuplicates(groups) {
 // ════════════════════════════════════════════════════════════════ ARCHIVES
 
 async function loadArchives() {
+  document.getElementById('content').innerHTML = `<div class="view-header"><h2>🗄 Archives / Dormants</h2></div>${skeletonRows()}`;
   const data = await apiFetch('/api/contacts/archives');
   if(!data) return;
   document.getElementById('content').innerHTML = rArchives(data);

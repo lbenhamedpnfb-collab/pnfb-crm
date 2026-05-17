@@ -5,6 +5,11 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import Bcrypt
 from flask_mail import Mail, Message
 from functools import wraps
+try:
+    from flask_wtf.csrf import CSRFProtect
+    _CSRF_AVAILABLE = True
+except ImportError:
+    _CSRF_AVAILABLE = False
 
 BASE = os.path.dirname(__file__)
 STATIC_DATA = os.path.join(BASE, 'strategic_data.json')
@@ -42,6 +47,7 @@ app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['SESSION_COOKIE_SECURE'] = _is_prod
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['PERMANENT_SESSION_LIFETIME'] = 86400 * 30  # 30 jours
+app.config['WTF_CSRF_TIME_LIMIT'] = 3600
 
 # Email
 app.config['MAIL_SERVER']         = os.environ.get('MAIL_SERVER', 'smtp.gmail.com')
@@ -54,6 +60,7 @@ app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_DEFAULT_SENDER', os.env
 db     = SQLAlchemy(app)
 bcrypt = Bcrypt(app)
 mail   = Mail(app)
+csrf   = CSRFProtect(app) if _CSRF_AVAILABLE else None
 
 try:
     from flask_limiter import Limiter
@@ -110,6 +117,11 @@ class Contact(db.Model):
     score_activity   = db.Column(db.Integer, default=20)
     data_quality     = db.Column(db.Integer, default=0)
     logs = db.relationship('ContactLog', backref='contact', lazy=True, cascade='all,delete-orphan')
+    __table_args__ = (
+        db.Index('ix_contact_archived_score', 'archived', 'score_commercial'),
+        db.Index('ix_contact_segment', 'segment'),
+        db.Index('ix_contact_stage', 'stage'),
+    )
 
     def to_dict(self):
         return {
@@ -595,7 +607,9 @@ def api_add_log(cid):
         c.stage = 'Meeting'
         c.stage_changed_at = datetime.utcnow()
     result_l = (data.get('result', '') or '').lower()
-    if any(w in result_l for w in ('signé', 'signe', 'convention', 'accord')) and c.stage not in ('Signed', 'Deployed'):
+    _neg = ('pas signé', 'pas signe', 'non signé', 'non signe', 'refus', 'refuse', 'annulé', 'annule', 'pas d\'accord', 'pas accord')
+    _pos = ('signé', 'signe', 'convention', 'accord')
+    if any(w in result_l for w in _pos) and not any(n in result_l for n in _neg) and c.stage not in ('Signed', 'Deployed'):
         c.stage = 'Signed'
         c.stage_changed_at = datetime.utcnow()
     # Activity score boost
@@ -692,7 +706,8 @@ def api_mark_done(cid):
         c.stage = 'Meeting'
         c.stage_changed_at = datetime.utcnow()
     result_str = (data.get('result', '') or '').lower()
-    if any(w in result_str for w in ('signé', 'signe', 'convention', 'accord')) and c.stage not in ('Signed', 'Deployed') and not data.get('stage'):
+    _neg2 = ('pas signé', 'pas signe', 'non signé', 'non signe', 'refus', 'refuse', 'annulé', 'annule', 'pas d\'accord', 'pas accord')
+    if any(w in result_str for w in ('signé', 'signe', 'convention', 'accord')) and not any(n in result_str for n in _neg2) and c.stage not in ('Signed', 'Deployed') and not data.get('stage'):
         c.stage = 'Signed'
         c.stage_changed_at = datetime.utcnow()
     # Activity score boost
@@ -1660,6 +1675,10 @@ with app.app_context():
 
 if LIMITER_ENABLED and limiter:
     limiter.limit("10/minute")(auth_login)
+    limiter.limit("120/minute")(api_contacts)
+    limiter.limit("30/minute")(api_create_contact)
+    limiter.limit("60/minute")(api_update_contact)
+    limiter.limit("60/minute")(api_add_log)
 
 if __name__ == '__main__':
     app.run(debug=not _is_prod, port=5050)
