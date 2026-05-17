@@ -1830,8 +1830,8 @@ function rPartners() {
         <div style="font-size:11.5px;color:#333;line-height:1.5">Convention POEI = accès base candidats + financement formation 100%. Objectif : signer avant fin mai. Contact : Directeur territorial.</div>
       </div>
       <div style="padding:12px;background:var(--bl);border-radius:8px;border-left:3px solid var(--b)">
-        <div style="font-weight:900;font-size:12px;color:var(--b);margin-bottom:5px">2. Top 5 Agences Intérim IDF</div>
-        <div style="font-size:11.5px;color:#333;line-height:1.5">Manpower, Adecco, Randstad, Synergie, Actual — prescripteurs naturels POEI. Convention co-positionnement candidats = flux qualifié permanent.</div>
+        <div style="font-weight:900;font-size:12px;color:var(--b);margin-bottom:5px">2. Top Agences Intérim IDF</div>
+        <div style="font-size:11.5px;color:var(--tx);line-height:1.5">Agences intérim IDF (Manpower, Adecco, Randstad…) — prescripteurs naturels POEI. Convention co-positionnement candidats = flux qualifié permanent.</div>
       </div>
       <div style="padding:12px;background:var(--yl);border-radius:8px;border-left:3px solid var(--y)">
         <div style="font-weight:900;font-size:12px;color:#B07700;margin-bottom:5px">3. AKTO + UNIFORMATION (OPCO)</div>
@@ -2210,63 +2210,64 @@ function rContactsTable(list) {
       const stages = [...new Set(contacts.map(c=>SL[c.stage]||c.stage||'Prospect'))].join(', ');
       const bestScore = Math.max(...contacts.map(c=>c.score||0));
       const dmContacts = contacts.filter(c=>c.decision_maker);
-      h += `<tr class="company-group-row" onclick="toggleGroup('${gid}')" style="cursor:pointer;background:#1a1a1a;border-left:3px solid ${col}">
+      const init = (company||'?').trim().charAt(0).toUpperCase();
+      h += `<tr class="company-group-row" onclick="toggleGroup('${gid}')" style="cursor:pointer;background:linear-gradient(90deg,${col}10,transparent);border-left:3px solid ${col}">
         <td onclick="event.stopPropagation()">
           <input type="checkbox" ${allSel?'checked':''} onchange="(()=>{contacts${best.id}.forEach(id=>{if(this.checked)G.bulkSel.add(id);else G.bulkSel.delete(id)});updateBulkBar()})()" style="cursor:pointer;accent-color:var(--ac)">
         </td>
         <td>
-          <div style="display:flex;align-items:center;gap:8px">
-            <span class="grp-chevron" id="chv_${gid}" style="color:#666;font-size:11px;transition:.15s;display:inline-block">▶</span>
-            <div style="width:3px;height:34px;background:${col};border-radius:2px;flex:0 0 3px"></div>
+          <div style="display:flex;align-items:center;gap:9px">
+            <span class="grp-chevron" id="chv_${gid}" style="color:${col};font-size:11px;transition:.15s;display:inline-block;width:12px">▶</span>
+            <div class="co-av" style="background:${col}">${init}</div>
             <div>
-              <div style="font-weight:900;font-size:13px;color:#fff">${esc(company)}</div>
-              <div style="font-size:10px;color:#666;margin-top:1px">${esc(contacts[0].sector||'')} · ${contacts.length} contacts</div>
+              <div style="font-weight:900;font-size:13px;color:var(--tx)">${esc(company)}</div>
+              <div style="font-size:10px;color:var(--mu);margin-top:1px">${esc(contacts[0].sector||'')} · ${contacts.length} contacts</div>
             </div>
-            <span style="background:${col}22;color:${col};border:1px solid ${col}44;border-radius:20px;padding:1px 8px;font-size:10px;font-weight:800;margin-left:4px">${contacts.length} contacts</span>
+            <span style="background:${col}18;color:${col};border:1px solid ${col}33;border-radius:20px;padding:1px 8px;font-size:10px;font-weight:800;margin-left:4px">${contacts.length} contacts</span>
           </div>
         </td>
-        <td style="font-size:11px;color:#888">
-          ${dmContacts.length ? `<span style="color:#F5A623;font-size:10px;font-weight:700">★ ${dmContacts.length} décideur${dmContacts.length>1?'s':''}</span><br>` : ''}
-          ${contacts.slice(0,2).map(c=>`<span style="color:#aaa">${esc(c.name||'À identifier')}</span>`).join(', ')}${contacts.length>2?` <span style="color:#555">+${contacts.length-2}</span>`:''}
+        <td style="font-size:11px;color:var(--mu)">
+          ${dmContacts.length ? `<span style="color:var(--y);font-size:10px;font-weight:700">★ ${dmContacts.length} décideur${dmContacts.length>1?'s':''}</span><br>` : ''}
+          ${contacts.slice(0,2).map(c=>`<span style="color:var(--mu)">${esc(c.name||'À identifier')}</span>`).join(', ')}${contacts.length>2?` <span style="color:var(--mu2)">+${contacts.length-2}</span>`:''}
         </td>
         <td>${scoreTag(bestScore)}</td>
         <td>${segTag(best.segment)}</td>
-        <td style="font-size:11px;color:#777">${stages}</td>
-        <td style="font-size:11px;color:#777">${esc((best.next_action||'').substring(0,40))}</td>
+        <td style="font-size:11px;color:var(--mu)">${stages}</td>
+        <td style="font-size:11px;color:var(--mu)">${esc((best.next_action||'').substring(0,40))}</td>
         <td onclick="event.stopPropagation()" style="white-space:nowrap">
-          <button onclick="openEmailModal(${best.id})" style="background:none;border:none;cursor:pointer;color:#1A73E8;padding:3px 5px;font-size:13px" title="Email">📧</button>
-          <button onclick="openContactForm(${best.id})" style="background:none;border:none;cursor:pointer;color:#888;padding:3px 5px;font-size:13px" title="Modifier">✏️</button>
+          <button onclick="openEmailModal(${best.id})" style="background:none;border:none;cursor:pointer;color:var(--b);padding:3px 5px;font-size:13px" title="Email">📧</button>
+          <button onclick="openContactForm(${best.id})" style="background:none;border:none;cursor:pointer;color:var(--mu);padding:3px 5px;font-size:13px" title="Modifier">✏️</button>
         </td>
       </tr>`;
 
       // ── INDIVIDUAL CONTACT ROWS (hidden by default) ─────────────
-      h += `<tr id="${gid}" style="display:none"><td colspan="8" style="padding:0;background:#111">
+      h += `<tr id="${gid}" style="display:none"><td colspan="8" style="padding:0;background:#F8FAFF;border-left:3px solid ${col}33">
         <table style="width:100%;border-collapse:collapse">`;
       contacts.forEach(c => {
         const sel = G.bulkSel.has(c.id);
-        h += `<tr onclick="openC(${c.id})" ${sel?'style="background:#E8500A11"':''} style="border-bottom:1px solid #1e1e1e;cursor:pointer" onmouseover="this.style.background='#1e1e1e'" onmouseout="this.style.background='${sel?'#E8500A11':'transparent'}'">
+        h += `<tr onclick="openC(${c.id})" style="border-bottom:1px solid var(--bd);cursor:pointer;${sel?'background:var(--acl)':''}" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background='${sel?'var(--acl)':'transparent'}'">
           <td style="width:30px;padding:8px 10px" onclick="event.stopPropagation()">
             <input type="checkbox" class="tbl-cb" data-id="${c.id}" ${sel?'checked':''} onchange="toggleBulkSelect(${c.id},this.checked)" style="cursor:pointer;accent-color:var(--ac)">
           </td>
-          <td style="padding:8px 10px 8px 48px;width:220px">
+          <td style="padding:8px 10px 8px 52px;width:220px">
             <div style="display:flex;align-items:center;gap:6px">
-              <div style="width:2px;height:24px;background:${col};border-radius:2px;opacity:.5"></div>
-              <div style="font-size:11.5px;color:#bbb;font-weight:600">↳ ${esc(c.name||'À identifier')}</div>
+              <div style="width:2px;height:22px;background:${col};border-radius:2px;opacity:.5;flex:0 0 2px"></div>
+              <div style="font-size:11.5px;color:var(--tx);font-weight:600">↳ ${esc(c.name||'À identifier')}</div>
             </div>
-            <div style="font-size:10px;color:#555;margin-left:14px">${esc((c.title||'').substring(0,40))}</div>
+            <div style="font-size:10px;color:var(--mu);margin-left:14px">${esc((c.title||'').substring(0,40))}</div>
           </td>
           <td style="padding:8px 10px">
-            ${c.decision_maker?'<span style="color:#F5A623;font-size:10px;font-weight:800">★ Décideur</span><br>':''}
-            ${c.email?`<span style="font-size:10.5px;color:#888">${esc(c.email)}</span>`:'<span style="font-size:10px;color:#444">Email non renseigné</span>'}
+            ${c.decision_maker?'<span style="color:var(--y);font-size:10px;font-weight:800">★ Décideur</span><br>':''}
+            ${c.email?`<span style="font-size:10.5px;color:var(--mu)">${esc(c.email)}</span>`:'<span style="font-size:10px;color:var(--mu2)">Email non renseigné</span>'}
           </td>
           <td style="padding:8px 10px">${scoreTag(c.score)}</td>
           <td style="padding:8px 10px">${segTag(c.segment)}</td>
-          <td style="padding:8px 10px;font-size:11px;color:#777">${SL[c.stage]||c.stage||'Prospect'}</td>
-          <td style="padding:8px 10px">${atTag(c.action_type)}<div style="font-size:10px;color:#555;margin-top:1px">${esc((c.next_action||'').substring(0,40))}</div></td>
+          <td style="padding:8px 10px;font-size:11px;color:var(--mu)">${SL[c.stage]||c.stage||'Prospect'}</td>
+          <td style="padding:8px 10px">${atTag(c.action_type)}<div style="font-size:10px;color:var(--mu);margin-top:1px">${esc((c.next_action||'').substring(0,40))}</div></td>
           <td style="padding:8px 10px;white-space:nowrap" onclick="event.stopPropagation()">
             ${quickBtns(c)}
-            <button onclick="openContactForm(${c.id})" style="background:none;border:none;cursor:pointer;color:#666;padding:2px 4px;font-size:12px" title="Modifier">✏️</button>
-            <button onclick="openEmailModal(${c.id})" style="background:none;border:none;cursor:pointer;color:#1A73E8;padding:2px 4px;font-size:12px" title="Email">📧</button>
+            <button onclick="openContactForm(${c.id})" style="background:none;border:none;cursor:pointer;color:var(--mu);padding:2px 4px;font-size:12px" title="Modifier">✏️</button>
+            <button onclick="openEmailModal(${c.id})" style="background:none;border:none;cursor:pointer;color:var(--b);padding:2px 4px;font-size:12px" title="Email">📧</button>
           </td>
         </tr>`;
       });
@@ -2281,7 +2282,7 @@ function rContactsTable(list) {
       const sel = G.bulkSel.has(c.id);
       h += `<tr onclick="openC(${c.id})" ${sel?'class="selected"':''}>
         <td onclick="event.stopPropagation()"><input type="checkbox" class="tbl-cb" data-id="${c.id}" ${sel?'checked':''} onchange="toggleBulkSelect(${c.id},this.checked)" style="cursor:pointer;accent-color:var(--ac)"></td>
-        <td><div style="display:flex;align-items:center;gap:6px"><div style="width:3px;height:30px;background:${col};border-radius:2px;flex:0 0 3px"></div><div><div style="font-weight:800;font-size:12.5px">${esc(c.company)}</div><div style="font-size:10.5px;color:var(--mu)">${esc(c.sector||'')}</div></div></div></td>
+        <td><div style="display:flex;align-items:center;gap:9px"><div class="co-av" style="background:${col}">${(c.company||'?').trim().charAt(0).toUpperCase()}</div><div><div style="font-weight:800;font-size:12.5px">${esc(c.company)}</div><div style="font-size:10.5px;color:var(--mu)">${esc(c.sector||'')}</div></div></div></td>
         <td>${c.decision_maker?'<span class="dm-dot"></span>':''}${esc(c.name)}<div style="font-size:10.5px;color:var(--mu)">${esc((c.title||'').substring(0,35))}${(c.title||'').length>35?'…':''}</div></td>
         <td>${scoreTag(c.score)}</td>
         <td>${segTag(c.segment)}</td>

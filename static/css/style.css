@@ -850,9 +850,9 @@ tr.selected td { background: #FFF4EE; }
 .est-waiting { background: var(--bl); color: var(--b); border-color: #BFDBFE; }
 
 /* ═══════════════════════════════════════════════════════════ COMPANY GROUPS */
-.company-group-row { transition: background .12s; }
-.company-group-row:hover { background: var(--bg) !important; }
-.grp-chevron { user-select: none; width: 14px; display: inline-block; text-align: center; }
+.company-group-row { transition: all .12s; }
+.company-group-row:hover td { filter: brightness(.97); }
+.grp-chevron { user-select: none; width: 14px; display: inline-block; text-align: center; font-weight: 900; }
 
 /* ═══════════════════════════════════════════════════════════ MISSION CONTROL */
 .mc-wrap { display: flex; flex-direction: column; gap: 16px; padding: 4px 0; max-width: 1100px; }
