@@ -167,7 +167,7 @@ function render() {
 
 // ════════════════════════════════════════════════════════════════ HELPERS
 function today() { return new Date().toISOString().split('T')[0]; }
-function isDone(c) { return c._done===true; }
+function isDone(c) { return c.done===true; }
 function isOv(c,td) { return c.next_action_date && c.next_action_date < td && !isDone(c); }
 function isTd(c,td) { return c.next_action_date === td && !isDone(c); }
 function segO(c) { return {Strategic:0,Partner:1,'Quick Win':2,'Long Term':3,Dormant:4}[c.segment]??5; }
@@ -469,10 +469,10 @@ function rStrategic() {
   h += '<div class="strat-grid">';
   list.forEach((c,i) => {
     const col = secColor(c.sector);
+    const init = (c.company||'?').trim().charAt(0).toUpperCase();
     h += `<div class="strat-card" onclick="openC(${c.id})">
       <div class="strat-rank">#${i+1}</div>
-      <div style="width:8px;height:8px;border-radius:50%;background:${col};display:inline-block;margin-bottom:6px"></div>
-      <div class="strat-co">${esc(c.company)}</div>
+      <div style="display:flex;align-items:center;gap:9px;margin-bottom:10px"><div class="co-av" style="background:${col}">${init}</div><div class="strat-co" style="margin-bottom:0">${esc(c.company)}</div></div>
       <div class="strat-ct">${esc(c.name)} · ${esc((c.title||'').substring(0,40))}${(c.title||'').length>40?'…':''}</div>
       <div class="strat-score">
         <div style="font-size:13px;font-weight:900;color:${c.score>=80?'var(--g)':'var(--y)'}">${c.score}</div>
@@ -552,8 +552,9 @@ function rContactsTable(list) {
   </tr></thead><tbody>`;
   list.forEach(c => {
     const col = secColor(c.sector||'');
+    const init = (c.company||'?').trim().charAt(0).toUpperCase();
     h += `<tr onclick="openC(${c.id})">
-      <td><div style="display:flex;align-items:center;gap:6px"><div style="width:3px;height:30px;background:${col};border-radius:2px;flex:0 0 3px"></div><div><div style="font-weight:800;font-size:12.5px">${hl(c.company,G.q)}</div><div style="font-size:10.5px;color:var(--mu)">${esc(c.sector||'')}</div></div></div></td>
+      <td><div style="display:flex;align-items:center;gap:9px"><div class="co-av" style="background:${col}">${init}</div><div><div style="font-weight:800;font-size:12.5px">${hl(c.company,G.q)}</div><div style="font-size:10.5px;color:var(--mu)">${esc(c.sector||'')}</div></div></div></td>
       <td>${c.decision_maker?'<span class="dm-dot"></span>':''}${hl(c.name,G.q)}<div style="font-size:10.5px;color:var(--mu)">${esc((c.title||'').substring(0,35))}${(c.title||'').length>35?'…':''}</div></td>
       <td>${scoreTag(c.score)}</td>
       <td>${segTag(c.segment)}</td>
@@ -579,9 +580,12 @@ function rPipeline() {
       <div class="pipe-col-head"><span style="color:${isGood?'var(--g)':'var(--mu)'}">${SL[st]}</span><span class="pipe-col-cnt" style="${isGood?'background:var(--gl);color:var(--g)':''}">${cards.length}</span></div>`;
     cards.forEach(c=>{
       const col=secColor(c.sector||'');
+      const init=(c.company||'?').trim().charAt(0).toUpperCase();
       h+=`<div class="pipe-card" onclick="openC(${c.id})">
-        <div style="width:100%;height:2px;background:${col};border-radius:2px;margin-bottom:7px"></div>
-        <div class="pc-co">${esc(c.company)}</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">
+          <div class="co-av" style="background:${col};width:26px;height:26px;border-radius:6px;font-size:11px;flex:0 0 26px">${init}</div>
+          <div class="pc-co" style="margin:0">${esc(c.company)}</div>
+        </div>
         <div class="pc-nm">${esc(c.name)}</div>
         <div class="pc-ft"><span class="pc-deal">${esc(c.deal_potential||c.poei_offer||'')}</span>${scoreTag(c.score)}</div>
       </div>`;
@@ -1007,10 +1011,12 @@ function rMissionControl(d) {
     h += `<div style="color:#0F9D58;font-size:12px;padding:12px 0">✅ Aucun contact bloqué — beau travail !</div>`;
   } else {
     stuck.forEach(s => {
-      const col = secColor('');
+      const col = secColor(s.sector||'');
+      const init = (s.company||'?').trim().charAt(0).toUpperCase();
       const label = s.days===999?'Jamais contacté':`Inactif ${s.days}j`;
       const urgColor = s.days===999||s.days>=30?'#E8500A':s.days>=14?'#F5A623':'#888';
       h += `<div class="mc-stuck-row" onclick="openC(${s.id})">
+        <div class="co-av" style="background:${col};width:26px;height:26px;border-radius:6px;font-size:10px;flex:0 0 26px">${init}</div>
         <div style="flex:1">
           <div style="font-weight:700;font-size:12.5px">${esc(s.company)}</div>
           <div style="font-size:10px;color:var(--mu);margin-top:1px">${stageLabels[s.stage]||s.stage}</div>
@@ -1034,13 +1040,14 @@ function rMissionControl(d) {
   } else {
     d.actions.forEach((c,i) => {
       const col = secColor(c.sector||'');
+      const init = (c.company||'?').trim().charAt(0).toUpperCase();
       const overdue = c.next_action_date && c.next_action_date < td;
       const isDue = c.next_action_date === td;
       const rowBg = overdue?'#E8500A08':isDue?'#F5A62308':'';
       const atIcon = {'Email':'✉️','Appel':'📞','LinkedIn':'🔗','RDV':'📅','Relance':'🔄','Partenariat':'🤝'}[c.action_type]||'▸';
       h += `<div class="mc-action-row" style="background:${rowBg}" onclick="openC(${c.id})">
         <div class="mc-action-rank">${i+1}</div>
-        <div style="width:3px;height:38px;background:${col};border-radius:2px;flex-shrink:0"></div>
+        <div class="co-av" style="background:${col};width:28px;height:28px;border-radius:7px;font-size:11px;flex:0 0 28px">${init}</div>
         <div style="flex:1;min-width:0">
           <div style="display:flex;align-items:center;gap:6px">
             <span style="font-weight:800;font-size:12.5px">${esc(c.company)}</span>

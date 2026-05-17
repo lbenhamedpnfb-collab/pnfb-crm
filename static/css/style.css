@@ -1002,3 +1002,34 @@ tr.selected td { background: #FFF4EE; }
 .progress-bar-fill.green { background: var(--g); }
 
 mark { background: #FFF0B3; color: var(--tx); border-radius: 2px; padding: 0 1px; font-style: normal; }
+
+/* ═══════════════════════════════════════════════════ COMPANY AVATAR IN TABLE */
+.co-av {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 900;
+  flex: 0 0 34px;
+  text-shadow: 0 1px 2px rgba(0,0,0,.22);
+  box-shadow: 0 1px 4px rgba(0,0,0,.14);
+  letter-spacing: 0;
+}
+
+/* ═══════════════════════════════════════════════════ PAGE WRAP (sequences, email-suivi) */
+.page-wrap { display: flex; flex-direction: column; gap: 16px; padding: 4px 0; }
+
+/* ═══════════════════════════════════════════════════ KPI-VAL / KPI-LBL ALIASES */
+.g-kpi .kpi-val { font-size: 28px; font-weight: 900; line-height: 1; letter-spacing: -.5px; }
+.g-kpi .kpi-lbl { font-size: 10px; font-weight: 700; color: var(--mu); text-transform: uppercase; letter-spacing: .6px; margin-top: 6px; }
+
+/* ═══════════════════════════════════════════════════ CONTENT FADE-IN */
+@keyframes fadeInView {
+  from { opacity: 0; transform: translateY(5px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+#content > * { animation: fadeInView .18s ease both; }

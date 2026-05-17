@@ -10,7 +10,12 @@ BASE = os.path.dirname(__file__)
 STATIC_DATA = os.path.join(BASE, 'strategic_data.json')
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'pnfb-crm-secret-2026-change-in-prod')
+import warnings as _warnings
+_secret = os.environ.get('SECRET_KEY')
+if not _secret:
+    _warnings.warn("SECRET_KEY non définie — sessions vulnérables. Définir SECRET_KEY dans .env.", stacklevel=2)
+    _secret = 'pnfb-crm-secret-2026-change-in-prod'
+app.config['SECRET_KEY'] = _secret
 
 # PostgreSQL en production, SQLite en local
 _db_url = os.environ.get('DATABASE_URL', '')
@@ -116,7 +121,7 @@ class Contact(db.Model):
             'alert': self.alert or '',
             'linkedin': self.linkedin or '',
             'notes': self.notes or '',
-            '_done': bool(self.done),
+            'done': bool(self.done),
             'created_at': self.created_at.isoformat() if self.created_at else '',
             'stage_changed_at': self.stage_changed_at.isoformat() if self.stage_changed_at else '',
             'last_activity_at': self.last_activity_at.isoformat() if self.last_activity_at else '',
@@ -670,9 +675,14 @@ def api_mission():
 @app.route('/api/mission/target', methods=['POST'])
 @login_required
 def api_set_target():
-    # Store targets in session for now (could be DB)
     data = request.get_json()
-    session['weekly_targets'] = data
+    for key, val in data.items():
+        s = Setting.query.filter_by(key=f'target_{key}').first()
+        if s:
+            s.value = str(val)
+        else:
+            db.session.add(Setting(key=f'target_{key}', value=str(val)))
+    db.session.commit()
     return jsonify({'ok': True})
 
 
@@ -691,7 +701,7 @@ def _load_goals():
     for s in Setting.query.all():
         if s.key in result:
             try: result[s.key] = int(s.value)
-            except: result[s.key] = s.value
+            except (ValueError, TypeError): result[s.key] = s.value
     return result
 
 def _save_goals(d):
@@ -908,7 +918,7 @@ def api_send_email():
         if contact_id:
             c = Contact.query.get(contact_id)
             if c:
-                c.last_activity = datetime.utcnow()
+                c.last_activity_at = datetime.utcnow()
                 db.session.commit()
         return jsonify({'ok': True})
     except Exception as e:
@@ -1053,7 +1063,7 @@ def api_import_contacts():
             if s >= 5: return 'HIGH'
             if s >= 3: return 'MEDIUM'
             return 'LOW'
-        except: return 'MEDIUM'
+        except (ValueError, TypeError): return 'MEDIUM'
 
     def _score_to_segment(score_str):
         try:
@@ -1062,13 +1072,13 @@ def api_import_contacts():
             if s >= 4: return 'Quick Win'
             if s >= 3: return 'Long Term'
             return 'Dormant'
-        except: return 'Long Term'
+        except (ValueError, TypeError): return 'Long Term'
 
     def _score_to_int(score_str):
         try:
             s = int(float(score_str))
             return min(100, s * 20)
-        except: return 50
+        except (ValueError, TypeError): return 50
 
     existing_companies = {c.company.strip().lower() for c in Contact.query.all()}
 
@@ -1224,7 +1234,7 @@ def api_forecast():
                 d = l.date[:10]
                 if d >= (today - timedelta(days=30)).isoformat():
                     days[d] = days.get(d, 0) + 1
-            except: pass
+            except (ValueError, IndexError): pass
     activity_trend = [{'date': (today - timedelta(days=29-i)).isoformat(),
                         'count': days.get((today - timedelta(days=29-i)).isoformat(), 0)} for i in range(30)]
     return jsonify({
