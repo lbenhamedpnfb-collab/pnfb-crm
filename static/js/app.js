@@ -82,7 +82,8 @@ function buildSectorSidebar() {
 function updSidebar() {
   const td = today();
   const ov = G.contacts.filter(c => !isDone(c) && (isOv(c,td)||isTd(c,td)));
-  document.getElementById('bdg-today').textContent = ov.length || '0';
+  const bdgToday = document.getElementById('bdg-today');
+  if (bdgToday) { bdgToday.textContent = ov.length || '0'; bdgToday.style.display = ''; }
   document.getElementById('ss-str').textContent = G.contacts.filter(c=>c.segment==='Strategic').length;
   document.getElementById('ss-qw').textContent  = G.contacts.filter(c=>c.segment==='Quick Win').length;
   document.getElementById('ss-si').textContent  = G.contacts.filter(c=>c.stage==='Signed'||c.stage==='Deployed').length;
@@ -122,7 +123,11 @@ function tF(k,v) {
   document.querySelectorAll(`[data-fk="${k}"]`).forEach(b => b.classList.toggle('on', b.dataset.fv===G.filters[k]));
   render();
 }
-function onSearch(v) { G.q = v.toLowerCase(); render(); }
+let _searchTimer = null;
+function onSearch(v) {
+  clearTimeout(_searchTimer);
+  _searchTimer = setTimeout(() => { G.q = v.toLowerCase(); render(); }, 300);
+}
 
 function applyF(list) {
   let l = list;
@@ -167,6 +172,12 @@ function isOv(c,td) { return c.next_action_date && c.next_action_date < td && !i
 function isTd(c,td) { return c.next_action_date === td && !isDone(c); }
 function segO(c) { return {Strategic:0,Partner:1,'Quick Win':2,'Long Term':3,Dormant:4}[c.segment]??5; }
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function hl(s, q) {
+  if (!q || !s) return esc(s);
+  const safe = esc(String(s));
+  const re = new RegExp('(' + q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
+  return safe.replace(re, '<mark>$1</mark>');
+}
 
 function segTag(seg) {
   const cls={Strategic:'t-str','Quick Win':'t-qw',Partner:'t-pa','Long Term':'t-lt',Dormant:'t-do'};
@@ -411,7 +422,7 @@ function rNewTargets() {
           </div>
           <div style="display:flex;gap:5px;margin-top:8px;flex-wrap:wrap">
             ${segTag(c.segment)}
-            <span style="background:#🔴 NOUVEAU"==='🔴 NOUVEAU'?'#FFF0EA':'#f5f5f5';padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;background:#FFF0EA;color:#E8500A;border:1px solid #E8500A44">🔴 Nouveau</span>
+            <span style="padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;background:#FFF0EA;color:#E8500A;border:1px solid #E8500A44">🔴 Nouveau</span>
           </div>
         </div>
 
@@ -542,8 +553,8 @@ function rContactsTable(list) {
   list.forEach(c => {
     const col = secColor(c.sector||'');
     h += `<tr onclick="openC(${c.id})">
-      <td><div style="display:flex;align-items:center;gap:6px"><div style="width:3px;height:30px;background:${col};border-radius:2px;flex:0 0 3px"></div><div><div style="font-weight:800;font-size:12.5px">${esc(c.company)}</div><div style="font-size:10.5px;color:var(--mu)">${esc(c.sector||'')}</div></div></div></td>
-      <td>${c.decision_maker?'<span class="dm-dot"></span>':''}${esc(c.name)}<div style="font-size:10.5px;color:var(--mu)">${esc((c.title||'').substring(0,35))}${(c.title||'').length>35?'…':''}</div></td>
+      <td><div style="display:flex;align-items:center;gap:6px"><div style="width:3px;height:30px;background:${col};border-radius:2px;flex:0 0 3px"></div><div><div style="font-weight:800;font-size:12.5px">${hl(c.company,G.q)}</div><div style="font-size:10.5px;color:var(--mu)">${esc(c.sector||'')}</div></div></div></td>
+      <td>${c.decision_maker?'<span class="dm-dot"></span>':''}${hl(c.name,G.q)}<div style="font-size:10.5px;color:var(--mu)">${esc((c.title||'').substring(0,35))}${(c.title||'').length>35?'…':''}</div></td>
       <td>${scoreTag(c.score)}</td>
       <td>${segTag(c.segment)}</td>
       <td style="font-size:11.5px;color:var(--mu)">${SL[c.stage]||c.stage||'Prospect'}</td>
@@ -639,24 +650,28 @@ function tScript(id) {
 
 // ════════════════════════════════════════════════════════════════ PLAN 90J
 function rPlan90() {
-  let h='';
-  ALL_PLAN.forEach(w=>{
-    const tasks=w.tasks||[];
-    const dn=tasks.filter(t=>G.planState[t.id]).length;
-    const pct=tasks.length?Math.round(dn/tasks.length*100):0;
-    h+=`<div class="plan-week">
+  let h = '';
+  let autoOpened = false;
+  ALL_PLAN.forEach(w => {
+    const tasks = w.tasks || [];
+    const dn = tasks.filter(t => G.planState[t.id]).length;
+    const pct = tasks.length ? Math.round(dn / tasks.length * 100) : 0;
+    // Auto-open the first incomplete week
+    const isOpen = !autoOpened && pct < 100;
+    if (isOpen) autoOpened = true;
+    h += `<div class="plan-week">
       <div class="pw-head" onclick="tWeek('${w.week}')">
         <span class="pw-badge">${w.week}</span>
         <div style="flex:1;min-width:0"><div class="pw-title">${esc(w.title)}</div><div class="pw-focus">${esc(w.focus)}</div></div>
         <span class="pw-prog">${dn}/${tasks.length} (${pct}%)</span>
-        <span class="scr-arrow" id="pwa-${w.week}" style="font-size:20px">›</span>
+        <span class="scr-arrow${isOpen ? ' open' : ''}" id="pwa-${w.week}" style="font-size:20px">›</span>
       </div>
-      <div class="pw-body" id="pwb-${w.week}">
-        ${tasks.map(t=>{const done=G.planState[t.id]||false;return`<div class="task-item${done?' done':''}" id="tsk-${t.id}">
-          <div class="task-cb${done?' chk':''}" onclick="tTask('${t.id}')"></div>
+      <div class="pw-body${isOpen ? ' open' : ''}" id="pwb-${w.week}">
+        ${tasks.map(t => { const done = G.planState[t.id] || false; return `<div class="task-item${done ? ' done' : ''}" id="tsk-${t.id}">
+          <div class="task-cb${done ? ' chk' : ''}" onclick="tTask('${t.id}')"></div>
           <div class="task-body"><div class="task-day">${esc(t.day)}</div><div class="task-txt">${esc(t.txt)}</div></div>
           <span class="task-pri p-${t.p}">${t.p}</span>
-        </div>`;}).join('')}
+        </div>`; }).join('')}
       </div>
     </div>`;
   });
@@ -739,7 +754,35 @@ function openC(id) {
   document.getElementById('mo-next').innerHTML=`${atTag(c.action_type)} <strong>${esc(c.next_action||'')}</strong><div style="margin-top:5px;font-size:11px;color:var(--mu)">Date prévue : ${c.next_action_date||'—'}</div>`;
   rLog();
   document.getElementById('mo-note').value='';
+  // Scripts section
+  const scriptsSec = document.getElementById('mo-scripts-sec');
+  const scriptsBody = document.getElementById('mo-scripts-body');
+  if (scriptsSec && scriptsBody) {
+    const seg = c.segment || '';
+    const relevant = ALL_SCRIPTS.filter(s => !s.seg || s.seg === seg);
+    scriptsSec.style.display = relevant.length ? '' : 'none';
+    scriptsBody.style.display = 'none';
+    const arr = document.getElementById('mo-scripts-arrow');
+    if (arr) { arr.style.transform = ''; }
+    if (relevant.length) {
+      scriptsBody.innerHTML = relevant.map(sc => `
+        <div style="margin-bottom:8px;background:var(--bg);border-radius:var(--r8);padding:10px 12px">
+          <div style="font-weight:700;font-size:12px;margin-bottom:5px;color:var(--ac)">${esc(sc.name)} <span style="color:var(--mu);font-weight:400;font-size:10px">⏱ ${esc(sc.dur||'')}</span></div>
+          ${sc.steps.slice(0,2).map(s=>`<div style="font-size:11.5px;padding:3px 0;border-bottom:1px solid var(--bd)"><span style="font-weight:700;color:var(--mu);font-size:10px;text-transform:uppercase;margin-right:6px">${esc(s.ph)}</span>${esc(s.txt)}</div>`).join('')}
+          ${sc.steps.length>2?`<div style="font-size:10.5px;color:var(--mu);margin-top:4px">+${sc.steps.length-2} étapes · <span style="color:var(--ac);cursor:pointer;font-weight:700" onclick="closeMo();setView('scripts')">Voir tous les scripts →</span></div>`:''}
+        </div>`).join('');
+    }
+  }
   document.getElementById('overlay').classList.add('show');
+}
+
+function toggleMoScripts() {
+  const body = document.getElementById('mo-scripts-body');
+  const arr = document.getElementById('mo-scripts-arrow');
+  if (!body) return;
+  const open = body.style.display !== 'none';
+  body.style.display = open ? 'none' : '';
+  if (arr) arr.style.transform = open ? '' : 'rotate(90deg)';
 }
 function rLog() {
   const c=G.contacts.find(x=>x.id===G.selId);if(!c)return;
@@ -936,8 +979,8 @@ function rMissionControl(d) {
     const pct = Math.round(n/max*100);
     if(n===0 && s==='Prospect') return;
     h += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;cursor:pointer" onclick="setView('all-contacts')">
-      <div style="width:60px;font-size:10px;color:#888;text-align:right;flex-shrink:0">${stageLabels[s]}</div>
-      <div style="flex:1;background:#1a1a1a;border-radius:3px;height:20px;position:relative">
+      <div style="width:60px;font-size:10px;color:var(--mu2);text-align:right;flex-shrink:0">${stageLabels[s]}</div>
+      <div style="flex:1;background:var(--bg);border-radius:3px;height:20px;position:relative">
         <div style="width:${pct}%;background:${stageColors[s]};border-radius:3px;height:100%;display:flex;align-items:center;padding-left:6px;min-width:${n>0?'28px':'0'}">
           ${n>0?`<span style="font-size:10px;font-weight:800;color:#fff">${n}</span>`:''}
         </div>
@@ -946,9 +989,9 @@ function rMissionControl(d) {
   });
   // Prospect toujours en bas
   const np = sc['Prospect']||0;
-  h += `<div style="display:flex;align-items:center;gap:8px;margin-top:8px;padding-top:8px;border-top:1px solid #222;cursor:pointer" onclick="setView('all-contacts')">
-    <div style="width:60px;font-size:10px;color:#555;text-align:right;flex-shrink:0">Prospect</div>
-    <div style="flex:1;background:#1a1a1a;border-radius:3px;height:20px;position:relative">
+  h += `<div style="display:flex;align-items:center;gap:8px;margin-top:8px;padding-top:8px;border-top:1px solid var(--bd);cursor:pointer" onclick="setView('all-contacts')">
+    <div style="width:60px;font-size:10px;color:var(--mu);text-align:right;flex-shrink:0">Prospect</div>
+    <div style="flex:1;background:var(--bg);border-radius:3px;height:20px;position:relative">
       <div style="width:100%;background:#78909C33;border-radius:3px;height:100%;display:flex;align-items:center;padding-left:6px">
         <span style="font-size:10px;color:#78909C">${np} à contacter</span>
       </div>
@@ -959,7 +1002,7 @@ function rMissionControl(d) {
   // ── CONTACTS BLOQUÉS ─────────────────────────────────────────────
   const stuck = (d.stuck||[]).slice(0,5);
   h += `<div class="mc-panel" style="flex:1">
-    <div class="mc-panel-title">⚠️ Jamais contactés / Bloqués <span style="font-size:10px;color:#555;font-weight:400">(Strategic + Quick Win)</span></div>`;
+    <div class="mc-panel-title">⚠️ Jamais contactés / Bloqués <span style="font-size:10px;color:var(--mu);font-weight:400">(Strategic + Quick Win)</span></div>`;
   if(stuck.length===0) {
     h += `<div style="color:#0F9D58;font-size:12px;padding:12px 0">✅ Aucun contact bloqué — beau travail !</div>`;
   } else {
@@ -970,7 +1013,7 @@ function rMissionControl(d) {
       h += `<div class="mc-stuck-row" onclick="openC(${s.id})">
         <div style="flex:1">
           <div style="font-weight:700;font-size:12.5px">${esc(s.company)}</div>
-          <div style="font-size:10px;color:#666;margin-top:1px">${stageLabels[s.stage]||s.stage}</div>
+          <div style="font-size:10px;color:var(--mu);margin-top:1px">${stageLabels[s.stage]||s.stage}</div>
         </div>
         <span style="font-size:10px;color:${urgColor};background:${urgColor}18;padding:2px 7px;border-radius:10px;white-space:nowrap">${label}</span>
         <button onclick="event.stopPropagation();openEmailModal(${s.id})" style="background:#1A73E822;border:1px solid #1A73E844;color:#1A73E8;border-radius:4px;padding:3px 7px;font-size:11px;cursor:pointer">📧</button>
@@ -983,7 +1026,7 @@ function rMissionControl(d) {
   h += `<div class="mc-panel" style="margin-top:0">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
       <div class="mc-panel-title" style="margin:0">🎯 Actions prioritaires — Top 12 à traiter</div>
-      <div style="font-size:11px;color:#555">Score × Segment × Urgence</div>
+      <div style="font-size:11px;color:var(--mu)">Score × Segment × Urgence</div>
     </div>`;
 
   if(!d.actions || d.actions.length===0) {
@@ -1004,9 +1047,9 @@ function rMissionControl(d) {
             ${segTag(c.segment)}
             ${overdue?'<span style="font-size:9px;background:#E8500A22;color:#E8500A;padding:1px 5px;border-radius:8px">EN RETARD</span>':''}
           </div>
-          <div style="font-size:11px;color:#777;margin-top:2px">
+          <div style="font-size:11px;color:var(--mu);margin-top:2px">
             ${atIcon} ${esc(c.next_action||'Définir la prochaine action')}
-            ${c.next_action_date?`<span style="color:${overdue?'#E8500A':isDue?'#F5A623':'#555'}"> · ${c.next_action_date}</span>`:''}
+            ${c.next_action_date?`<span style="color:${overdue?'#E8500A':isDue?'#F5A623':'var(--mu)'}"> · ${c.next_action_date}</span>`:''}
           </div>
         </div>
         <div style="display:flex;align-items:center;gap:4px;flex-shrink:0" onclick="event.stopPropagation()">
@@ -1020,17 +1063,17 @@ function rMissionControl(d) {
   h += `</div>`;
 
   // ── OBJECTIFS MODIFIABLES ────────────────────────────────────────
-  h += `<div class="mc-panel" style="background:#111;border-color:#222">
+  h += `<div class="mc-panel" style="background:var(--tx);border-color:rgba(255,255,255,.1)">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-      <div class="mc-panel-title" style="margin:0;color:#888">⚙️ Objectifs hebdomadaires</div>
+      <div class="mc-panel-title" style="margin:0;color:rgba(255,255,255,.45)">⚙️ Objectifs hebdomadaires</div>
       <button onclick="saveMissionTargets()" style="background:#E8500A;color:#fff;border:none;border-radius:5px;padding:4px 10px;font-size:11px;cursor:pointer">Sauvegarder</button>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px">
       ${['emails','appels','rdv','relances'].map(k=>`
         <div>
-          <label style="font-size:10px;color:#555;text-transform:uppercase;letter-spacing:.5px">${{emails:'✉️ Emails',appels:'📞 Appels',rdv:'📅 RDV',relances:'🔄 Relances'}[k]}</label>
+          <label style="font-size:10px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.5px">${{emails:'✉️ Emails',appels:'📞 Appels',rdv:'📅 RDV',relances:'🔄 Relances'}[k]}</label>
           <input type="number" id="tgt-${k}" value="${targets[k]}" min="0" max="100"
-            style="width:100%;background:#1a1a1a;border:1px solid #333;border-radius:5px;padding:6px 8px;color:#fff;font-size:13px;font-weight:700;margin-top:3px">
+            style="width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.18);border-radius:5px;padding:6px 8px;color:#fff;font-size:13px;font-weight:700;margin-top:3px">
         </div>`).join('')}
     </div>
   </div>`;
@@ -2249,9 +2292,9 @@ function rContactsTable(list) {
   const total = list.length;
   const companies_count = sorted.length;
   h += `</tbody></table>
-    <div style="padding:10px 16px;font-size:11px;color:#555;border-top:1px solid #eee">
+    <div style="padding:10px 16px;font-size:11px;color:var(--mu);border-top:1px solid var(--bd)">
       ${companies_count} entreprise${companies_count>1?'s':''} · ${total} contact${total>1?'s':''}
-      ${sorted.filter(([,c])=>c.length>1).length ? ` · <span style="color:#888">${sorted.filter(([,c])=>c.length>1).length} avec plusieurs contacts <span style="color:#666">(cliquez ▶ pour déplie)</span></span>` : ''}
+      ${sorted.filter(([,c])=>c.length>1).length ? ` · <span style="color:var(--mu)">${sorted.filter(([,c])=>c.length>1).length} avec plusieurs contacts <span style="color:var(--mu2)">(cliquez ▶ pour déplie)</span></span>` : ''}
     </div>
   </div>`;
   return h;
@@ -2494,8 +2537,25 @@ function openEmailModal(cid) {
   document.getElementById('em-relance').value = rel.toISOString().split('T')[0];
   document.getElementById('em-subject').value = '';
   document.getElementById('em-note').value = '';
+  // Populate template shortcuts
+  const tplRow = document.getElementById('em-tpl-row');
+  if (tplRow) {
+    const shown = ALL_TEMPLATES.slice(0, 5);
+    tplRow.innerHTML = shown.length
+      ? `<span style="font-size:10px;color:var(--mu);font-weight:600;align-self:center;flex-shrink:0">Templates :</span>` +
+        shown.map(t => `<button onclick="applyEmailTemplate('${t.id}')" style="background:var(--acl);color:var(--ac);border:1px solid ${esc(secColor(''))}33;border-radius:20px;padding:2px 10px;font-size:10.5px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap">${esc(t.name)}</button>`).join('')
+      : '';
+  }
   document.getElementById('email-overlay').style.display = 'flex';
   setTimeout(() => document.getElementById('em-subject').focus(), 100);
+}
+
+function applyEmailTemplate(id) {
+  const t = ALL_TEMPLATES.find(x => String(x.id) === String(id));
+  if (!t) return;
+  document.getElementById('em-subject').value = t.subject || '';
+  document.getElementById('em-note').value = t.body || '';
+  document.getElementById('em-subject').focus();
 }
 
 // Ouvrir modal depuis la vue suivi (choisir contact)

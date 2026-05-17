@@ -1,6 +1,6 @@
-import os, json
-from datetime import datetime
-from flask import Flask, render_template, request, jsonify, session, redirect, url_for
+import os, json, csv, io, re
+from datetime import datetime, date, timedelta
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for, Response
 from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import Bcrypt
 from flask_mail import Mail, Message
@@ -28,8 +28,15 @@ if _db_url.startswith('postgres://'):
     _db_url = _db_url.replace('postgres://', 'postgresql://', 1)
 app.config['SQLALCHEMY_DATABASE_URI'] = _db_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+_is_prod = (
+    os.environ.get('FLASK_ENV') == 'production' or
+    os.environ.get('RAILWAY_ENVIRONMENT') == 'production' or
+    bool(os.environ.get('RAILWAY_PROJECT_ID'))
+)
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
-app.config['SESSION_COOKIE_SECURE'] = os.environ.get('FLASK_ENV') == 'production'
+app.config['SESSION_COOKIE_SECURE'] = _is_prod
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['PERMANENT_SESSION_LIFETIME'] = 86400 * 30  # 30 jours
 
 # Email
 app.config['MAIL_SERVER']         = os.environ.get('MAIL_SERVER', 'smtp.gmail.com')
@@ -423,7 +430,6 @@ def api_bulk_update():
 @app.route('/api/contacts/export')
 @login_required
 def api_export_contacts():
-    import csv, io
     contacts = Contact.query.all()
     output = io.StringIO()
     writer = csv.DictWriter(output, fieldnames=[
@@ -437,7 +443,6 @@ def api_export_contacts():
         d.pop('log', None)
         d['decision_maker'] = 'Oui' if d.get('decision_maker') else 'Non'
         writer.writerow({k: d.get(k,'') for k in writer.fieldnames})
-    from flask import Response
     return Response(
         '﻿' + output.getvalue(),
         mimetype='text/csv',
@@ -510,8 +515,7 @@ def api_update_log(lid):
 @app.route('/api/emails/suivi')
 @login_required
 def api_emails_suivi():
-    from datetime import date as ddate
-    today = ddate.today().isoformat()
+    today = date.today().isoformat()
     logs = ContactLog.query.filter(ContactLog.type == 'Email').order_by(ContactLog.date.desc()).all()
     result = []
     for log in logs:
@@ -563,9 +567,9 @@ def api_mark_done(cid):
     db.session.add(log)
     # Update contact
     if data.get('stage'):
+        if data['stage'] != c.stage:
+            c.stage_changed_at = datetime.utcnow()
         c.stage = data['stage']
-    if data.get('stage') and data['stage'] != c.stage:
-        c.stage_changed_at = datetime.utcnow()
     if data.get('next_type'):
         c.action_type = data['next_type']
     if data.get('next_txt'):
@@ -593,8 +597,6 @@ def api_mark_done(cid):
 @app.route('/api/mission')
 @login_required
 def api_mission():
-    from datetime import date, timedelta
-    import re
     today = date.today()
     today_str = today.isoformat()
     week_start = (today - timedelta(days=today.weekday())).isoformat()
@@ -716,7 +718,6 @@ def api_set_goals():
 @app.route('/api/kanban')
 @login_required
 def api_kanban():
-    import re
     PROB = {'Prospect':.05,'Contacted':.15,'Meeting':.35,'Proposal':.60,'Negotiation':.80,'Signed':1.0,'Deployed':1.0}
     def vol(s):
         m = re.search(r'(\d[\d\s]*)', str(s))
@@ -735,7 +736,6 @@ def api_kanban():
 @app.route('/api/contacts/bulk-date', methods=['POST'])
 @login_required
 def api_bulk_reset_dates():
-    from datetime import date, timedelta
     data = request.get_json()
     offset = int(data.get('days_offset', 0))
     segment = data.get('segment', '')
@@ -789,7 +789,6 @@ def api_toggle_task(task_id):
 @app.route('/api/metrics')
 @login_required
 def api_metrics():
-    import re
     contacts = Contact.query.all()
     logs = ContactLog.query.all()
     PROB = {'Prospect':0.05,'Contacted':0.15,'Meeting':0.35,'Proposal':0.60,'Negotiation':0.80,'Signed':1.0,'Deployed':1.0}
@@ -963,7 +962,6 @@ def api_delete_task(tid):
 @app.route('/api/tasks/stats')
 @login_required
 def api_tasks_stats():
-    from datetime import date
     today_str = date.today().isoformat()
     total = Task.query.filter_by(done=False).count()
     overdue = Task.query.filter(Task.due_date < today_str, Task.done == False).count()
@@ -1018,7 +1016,6 @@ def api_delete_email_template(tid):
 @app.route('/api/notifications')
 @login_required
 def api_notifications():
-    from datetime import date
     today_str = date.today().isoformat()
     oc = Contact.query.filter(Contact.next_action_date < today_str, Contact.done == False).count()
     tc = Contact.query.filter(Contact.next_action_date == today_str, Contact.done == False).count()
@@ -1036,7 +1033,6 @@ def api_notifications():
 @app.route('/api/import/contacts', methods=['POST'])
 @login_required
 def api_import_contacts():
-    import csv, io
     if 'file' not in request.files:
         return jsonify({'error': 'Pas de fichier'}), 400
     f = request.files['file']
@@ -1201,7 +1197,6 @@ def api_batch_import():
 @app.route('/api/forecast')
 @login_required
 def api_forecast():
-    import re
     PROB = {'Prospect':0.05,'Contacted':0.15,'Meeting':0.35,'Proposal':0.60,'Negotiation':0.80,'Signed':1.0,'Deployed':1.0}
     REV = 3000
     def parse_vol(s):
@@ -1220,7 +1215,6 @@ def api_forecast():
     pipeline_total = sum(by_stage.values())
     signed_revenue = by_stage.get('Signed', 0) + by_stage.get('Deployed', 0)
     # Activity last 30 days
-    from datetime import date, timedelta
     days = {}
     logs = ContactLog.query.all()
     today = date.today()
@@ -1272,7 +1266,6 @@ def api_seed_demo():
         return jsonify({'error': 'Admin requis'}), 403
     if Contact.query.count() > 0:
         return jsonify({'error': 'Des contacts existent déjà. Videz la base avant de seeder.'}), 409
-    from datetime import date, timedelta
     today = date.today().isoformat()
     demo = [
         dict(company='Groupe Elior', name='Marie Dupont', title='DRH', sector='🍽️ Restauration',
@@ -1412,4 +1405,4 @@ with app.app_context():
     _auto_setup()
 
 if __name__ == '__main__':
-    app.run(debug=os.environ.get('FLASK_ENV') != 'production', port=5050)
+    app.run(debug=not _is_prod, port=5050)

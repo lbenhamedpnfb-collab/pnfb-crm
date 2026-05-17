@@ -330,17 +330,18 @@ body {
 
 /* ═══════════════════════════════════════════════════════════════ KPI CARDS */
 .dash-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; margin-bottom: 20px; }
-.kpi-card {
+
+/* Base unifiée — toutes les variantes de KPI card partagent ce socle */
+.kpi-card, .g-kpi, .met-card, .task-kpi, .growth-kpi {
   background: var(--w);
   border: 1px solid var(--bd);
   border-radius: var(--r12);
-  padding: 18px;
   box-shadow: var(--sh-sm);
   position: relative;
   overflow: hidden;
-  transition: .15s;
 }
-.kpi-card::after {
+/* Barre colorée top (couleur via --kpi-color ou accent par défaut) */
+.kpi-card::after, .g-kpi::after, .met-card::after, .task-kpi::after, .growth-kpi::after {
   content: '';
   position: absolute;
   top: 0; left: 0; right: 0;
@@ -348,7 +349,15 @@ body {
   background: var(--kpi-color, var(--ac));
   border-radius: var(--r4) var(--r4) 0 0;
 }
-.kpi-card:hover { box-shadow: var(--sh); transform: translateY(-1px); }
+/* Hover lift unifié */
+.kpi-card:hover, .g-kpi:hover, .met-card:hover, .task-kpi:hover, .growth-kpi:hover {
+  box-shadow: var(--sh);
+  transform: translateY(-1px);
+  transition: .15s;
+}
+
+/* Padding et transition individuels */
+.kpi-card { padding: 18px; transition: .15s; }
 .kpi-card .kl { font-size: 10px; font-weight: 700; color: var(--mu); text-transform: uppercase; letter-spacing: .7px; margin-bottom: 10px; }
 .kpi-card .kv { font-size: 30px; font-weight: 900; line-height: 1; letter-spacing: -.5px; }
 .kpi-card .ks { font-size: 11px; color: var(--mu); margin-top: 5px; }
@@ -587,7 +596,7 @@ tbody tr:hover td { background: #F8FAFF; }
 
 /* ═══════════════════════════════════════════════════════════════ METRICS */
 .met-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; margin-bottom: 16px; }
-.met-card { background: var(--w); border: 1px solid var(--bd); border-radius: var(--r12); padding: 16px; box-shadow: var(--sh-sm); }
+.met-card { padding: 16px; }
 .met-card .ml { font-size: 10px; font-weight: 700; color: var(--mu); text-transform: uppercase; letter-spacing: .7px; margin-bottom: 10px; }
 .met-card .mv { font-size: 30px; font-weight: 900; letter-spacing: -.5px; }
 .met-card .ms { font-size: 11px; color: var(--mu); margin-top: 4px; }
@@ -727,8 +736,7 @@ tr.selected td { background: #FFF4EE; }
 
 /* ═══════════════════════════════════════════════════════════ GROWTH DASHBOARD */
 .growth-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; margin-bottom: 20px; }
-.g-kpi { background: var(--w); border: 1px solid var(--bd); border-radius: var(--r12); padding: 18px; box-shadow: var(--sh-sm); position: relative; overflow: hidden; }
-.g-kpi::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--kpi-color, var(--ac)); }
+.g-kpi { padding: 18px; }
 .g-kpi .gk-label { font-size: 10px; font-weight: 700; color: var(--mu); text-transform: uppercase; letter-spacing: .7px; margin-bottom: 10px; }
 .g-kpi .gk-val { font-size: 30px; font-weight: 900; line-height: 1; color: var(--kpi-color, var(--tx)); letter-spacing: -.5px; }
 .g-kpi .gk-sub { font-size: 11px; color: var(--mu); margin-top: 4px; }
@@ -782,8 +790,7 @@ tr.selected td { background: #FFF4EE; }
 .msc-stat:last-child { border-bottom: none; }
 .msc-stat .mk { color: var(--mu); }
 .msc-stat .mv { font-weight: 700; }
-.pain-item { background: var(--rl); color: var(--r); border-radius: var(--r4); padding: 4px 9px; font-size: 11px; margin-bottom: 4px; }
-.hook-card { background: var(--gl); color: var(--g); border-radius: var(--r4); padding: 4px 9px; font-size: 11px; margin-bottom: 4px; font-weight: 600; }
+/* .pain-item and .hook-card defined once above (sector view) — no override here */
 
 /* ═══════════════════════════════════════════════════════════════ PARTNERS */
 .partner-pipeline { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 24px; }
@@ -949,7 +956,7 @@ tr.selected td { background: #FFF4EE; }
 
 /* ═══════════════════════════════════════════════════════════════ TASKS VIEW */
 .tasks-header { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 22px; }
-.task-kpi { background: var(--w); border: 1px solid var(--bd); border-radius: var(--r12); padding: 16px 18px; box-shadow: var(--sh-sm); }
+.task-kpi { padding: 16px 18px; }
 .task-kpi .tk-v { font-size: 30px; font-weight: 900; line-height: 1; letter-spacing: -.5px; }
 .task-kpi .tk-l { font-size: 10px; color: var(--mu); text-transform: uppercase; letter-spacing: .6px; margin-top: 5px; font-weight: 700; }
 .task-group { margin-bottom: 22px; }
@@ -986,10 +993,12 @@ tr.selected td { background: #FFF4EE; }
 
 /* ═══════════════════════════════════════════════════════════ GROWTH KPIs */
 .growth-kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; margin-bottom: 20px; }
-.growth-kpi { background: var(--w); border: 1px solid var(--bd); border-radius: var(--r12); padding: 18px; box-shadow: var(--sh-sm); }
+.growth-kpi { padding: 18px; }
 .growth-kpi .gk-v { font-size: 28px; font-weight: 900; line-height: 1.1; letter-spacing: -.5px; }
 .growth-kpi .gk-l { font-size: 10px; color: var(--mu); text-transform: uppercase; letter-spacing: .6px; margin-bottom: 8px; font-weight: 700; }
 .growth-kpi .gk-sub { font-size: 11px; color: var(--mu); margin-top: 5px; }
 .progress-bar-wrap { margin-top: 10px; background: var(--bg); border-radius: 4px; height: 6px; overflow: hidden; }
 .progress-bar-fill { height: 100%; border-radius: 4px; background: var(--ac); transition: .6s; }
 .progress-bar-fill.green { background: var(--g); }
+
+mark { background: #FFF0B3; color: var(--tx); border-radius: 2px; padding: 0 1px; font-style: normal; }

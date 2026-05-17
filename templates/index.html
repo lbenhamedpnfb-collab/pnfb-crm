@@ -222,6 +222,13 @@
         </select>
       </div>
       <div class="mo-sec"><h4>Prochaine action planifiée</h4><div id="mo-next" style="background:var(--bg);border-radius:var(--r4);padding:11px;font-size:12.5px"></div></div>
+      <div class="mo-sec" id="mo-scripts-sec" style="display:none">
+        <h4 style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;margin-bottom:0" onclick="toggleMoScripts()">
+          📞 Scripts Appels
+          <span id="mo-scripts-arrow" style="font-size:18px;display:inline-block;transition:.2s;color:var(--mu)">›</span>
+        </h4>
+        <div id="mo-scripts-body" style="display:none;margin-top:10px"></div>
+      </div>
       <div class="mo-sec">
         <h4>Ajouter une note</h4>
         <textarea class="note-area" id="mo-note" placeholder="Résultat d'appel, information clé, prochaine étape…"></textarea>
@@ -268,6 +275,7 @@
       <button class="mo-close" onclick="closeEmailModal()">✕</button>
     </div>
     <div style="padding:16px 20px;display:flex;flex-direction:column;gap:12px">
+      <div id="em-tpl-row" style="display:flex;gap:5px;flex-wrap:wrap;align-items:center;min-height:24px"></div>
       <div class="dfg">
         <label>Objet de l'email *</label>
         <input type="text" id="em-subject" placeholder="Ex: Partenariat POEI PNFB — Formation agents propreté" style="width:100%;background:var(--w);border:1.5px solid var(--bd);border-radius:6px;padding:8px 10px;color:var(--tx);font-size:13px">
