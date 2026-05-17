@@ -83,6 +83,11 @@
     <div class="sb-label">Contacts</div>
     <div class="sb-item" data-v="strategic" onclick="setView('strategic')">
       <span class="ic">⭐</span><span class="lbl">Comptes Stratégiques</span>
+      <span class="bdg bdg-r" id="bdg-strategic">—</span>
+    </div>
+    <div class="sb-item" data-v="quick-wins" onclick="setView('quick-wins')">
+      <span class="ic">⚡</span><span class="lbl">Quick Wins</span>
+      <span class="bdg bdg-g" id="bdg-qw">—</span>
     </div>
     <div class="sb-item" data-v="all-contacts" onclick="setView('all-contacts')">
       <span class="ic">👥</span><span class="lbl">Tous les contacts</span>
@@ -91,6 +96,18 @@
     <div class="sb-item" data-v="new-targets" onclick="setView('new-targets')">
       <span class="ic">🔴</span><span class="lbl">Nouvelles cibles</span>
       <span class="bdg bdg-r" id="bdg-new">—</span>
+    </div>
+    <div class="sb-item" data-v="enrich" onclick="setView('enrich')">
+      <span class="ic">⚙</span><span class="lbl">Contacts à enrichir</span>
+      <span class="bdg bdg-b" id="bdg-enrich">—</span>
+    </div>
+    <div class="sb-item" data-v="duplicates" onclick="setView('duplicates')">
+      <span class="ic">🔁</span><span class="lbl">Doublons à traiter</span>
+      <span class="bdg bdg-r" id="bdg-dup">—</span>
+    </div>
+    <div class="sb-item" data-v="archives" onclick="setView('archives')">
+      <span class="ic">🗄</span><span class="lbl">Archives / Dormants</span>
+      <span class="bdg bdg-mu" id="bdg-arch">—</span>
     </div>
     <div class="sb-item" onclick="openContactForm()" style="border-left:2px solid #0F9D58;margin-left:4px">
       <span class="ic">➕</span><span class="lbl" style="color:#0F9D58;font-weight:800">Ajouter un contact</span>

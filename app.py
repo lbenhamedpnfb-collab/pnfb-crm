@@ -104,6 +104,11 @@ class Contact(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     stage_changed_at = db.Column(db.DateTime)
     last_activity_at = db.Column(db.DateTime)
+    archived         = db.Column(db.Boolean, default=False)
+    owner_id         = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    score_commercial = db.Column(db.Integer, default=0)
+    score_activity   = db.Column(db.Integer, default=20)
+    data_quality     = db.Column(db.Integer, default=0)
     logs = db.relationship('ContactLog', backref='contact', lazy=True, cascade='all,delete-orphan')
 
     def to_dict(self):
@@ -134,6 +139,11 @@ class Contact(db.Model):
             'created_at': self.created_at.isoformat() if self.created_at else '',
             'stage_changed_at': self.stage_changed_at.isoformat() if self.stage_changed_at else '',
             'last_activity_at': self.last_activity_at.isoformat() if self.last_activity_at else '',
+            'archived': bool(self.archived),
+            'owner_id': self.owner_id,
+            'score_commercial': self.score_commercial or 0,
+            'score_activity': self.score_activity or 20,
+            'data_quality': self.data_quality or 0,
             'log': [l.to_dict() for l in self.logs],
         }
 
@@ -324,10 +334,74 @@ def auth_delete_user(uid):
 
 # ─────────────────────────────────────────── CONTACTS API
 
+_PRIORITY_SECTORS = {'propreté', 'proprete', 'btp', 'batiment', 'bâtiment', 'restauration',
+                     'services personne', 'services à la personne', 'logistique', 'transport',
+                     'sécurité', 'securite', 'aide à domicile', 'aide a domicile', 'sap'}
+_DECISION_TITLES  = {'drh', 'rrh', 'directeur', 'pdg', 'gérant', 'gerant', 'responsable recrutement',
+                     'chef', 'dg', 'daf', 'responsable rh', 'directrice', 'manager rh'}
+
+def compute_commercial_score(c):
+    s = 0
+    if c.decision_maker: s += 20
+    title_l = (c.title or '').lower()
+    if any(t in title_l for t in _DECISION_TITLES): s += 15
+    sector_l = re.sub(r'[^\w\s]', '', (c.sector or '').lower())
+    if any(p in sector_l for p in _PRIORITY_SECTORS): s += 15
+    if c.email and (c.email_status or '').lower() not in ('invalid', 'unknown', ''):
+        s += 15
+    elif c.email:
+        s += 5
+    if c.phone: s += 10
+    if c.poei_offer: s += 10
+    if c.deal_potential: s += 10
+    if c.linkedin: s += 5
+    return min(100, s)
+
+def _recompute_scores(c):
+    c.score_commercial = compute_commercial_score(c)
+    c.data_quality = sum([
+        1 if (c.email and (c.email_status or '').lower() not in ('invalid', 'unknown', '')) else 0,
+        1 if c.phone else 0,
+        1 if bool(c.decision_maker) else 0,
+        1 if c.poei_offer else 0,
+    ])
+    if c.last_activity_at:
+        days = (datetime.utcnow() - c.last_activity_at).days
+        decay = (days // 30) * 5
+        c.score_activity = max(0, (c.score_activity or 20) - decay)
+    c.score = c.score_commercial
+
+def _auto_segment(c):
+    if c.archived:
+        return 'Dormant'
+    sector_l = re.sub(r'[^\w\s]', '', (c.sector or '').lower())
+    is_priority = any(p in sector_l for p in _PRIORITY_SECTORS)
+    has_contact = bool(c.email or c.phone)
+    has_dm = bool(c.decision_maker)
+    has_action = bool(c.next_action_date)
+    score = c.score_commercial or 0
+    is_interim = any(p in sector_l for p in ('intérim', 'interim', ' rh'))
+    days_since = 999
+    if c.last_activity_at:
+        days_since = (datetime.utcnow() - c.last_activity_at).days
+    if days_since >= 90 and not has_action and c.segment in ('Dormant', 'Long Term', None, ''):
+        return 'Dormant'
+    if is_priority and has_dm and has_contact and score >= 55:
+        return 'Strategic'
+    if has_contact and has_dm and has_action and (c.stage or 'Prospect') != 'Prospect':
+        return 'Quick Win'
+    if is_interim:
+        return 'Partner'
+    return 'Long Term'
+
 @app.route('/api/contacts')
 @login_required
 def api_contacts():
-    contacts = Contact.query.all()
+    include_archived = request.args.get('include_archived', '0') == '1'
+    if include_archived:
+        contacts = Contact.query.all()
+    else:
+        contacts = Contact.query.filter_by(archived=False).all()
     return jsonify([c.to_dict() for c in contacts])
 
 def _norm_sector(s):
@@ -413,6 +487,10 @@ def api_create_contact():
         done=False
     )
     db.session.add(c)
+    db.session.flush()
+    _recompute_scores(c)
+    if not data.get('segment'):
+        c.segment = _auto_segment(c)
     db.session.commit()
     return jsonify(c.to_dict()), 201
 
@@ -477,13 +555,17 @@ def api_update_contact(cid):
     UPDATABLE = ['company','name','title','sector','segment','stage','priority','score',
                  'email','email_status','phone','decision_maker','poei_offer','active_offers',
                  'action_type','next_action','next_action_date','deal_potential','alert',
-                 'linkedin','notes']
+                 'linkedin','notes','owner_id']
+    segment_manually_set = 'segment' in data
     for field in UPDATABLE:
         if field in data:
             val = _canonicalize_sector(data[field]) if field == 'sector' else data[field]
             setattr(c, field, val)
     if '_done' in data:
         c.done = bool(data['_done'])
+    _recompute_scores(c)
+    if not segment_manually_set:
+        c.segment = _auto_segment(c)
     db.session.commit()
     return jsonify(c.to_dict())
 
@@ -503,13 +585,23 @@ def api_add_log(cid):
         status=data.get('status', 'En attente')
     )
     db.session.add(log)
-    # Update contact activity timestamp + dynamic score
     c.last_activity_at = datetime.utcnow()
-    if c.stage == 'Prospect' and data.get('type') in ('Email','Appel','LinkedIn'):
+    log_type = data.get('type', '')
+    # Auto-advance stage
+    if c.stage == 'Prospect' and log_type in ('Email', 'Appel', 'LinkedIn'):
         c.stage = 'Contacted'
         c.stage_changed_at = datetime.utcnow()
-    score_boost = {'Email':5,'Appel':8,'RDV':20,'LinkedIn':4,'Relance':3}.get(data.get('type',''),3)
-    c.score = min(100, (c.score or 50) + score_boost)
+    if log_type == 'RDV' and c.stage in ('Prospect', 'Contacted'):
+        c.stage = 'Meeting'
+        c.stage_changed_at = datetime.utcnow()
+    result_l = (data.get('result', '') or '').lower()
+    if any(w in result_l for w in ('signé', 'signe', 'convention', 'accord')) and c.stage not in ('Signed', 'Deployed'):
+        c.stage = 'Signed'
+        c.stage_changed_at = datetime.utcnow()
+    # Activity score boost
+    score_boost = {'Email': 5, 'Appel': 8, 'RDV': 20, 'LinkedIn': 4, 'Relance': 3}.get(log_type, 3)
+    c.score_activity = min(100, (c.score_activity or 20) + score_boost)
+    _recompute_scores(c)
     db.session.commit()
     return jsonify(log.to_dict())
 
@@ -592,16 +684,24 @@ def api_mark_done(cid):
         c.next_action_date = data['next_date']
     c.last_activity_at = datetime.utcnow()
     c.done = False
-    # Auto-advance stage to Contacted if still Prospect
+    # Auto-advance stage
     if c.stage == 'Prospect':
         c.stage = 'Contacted'
         c.stage_changed_at = datetime.utcnow()
-    # Dynamic score boost
+    if c.action_type == 'RDV' and c.stage in ('Prospect', 'Contacted') and not data.get('stage'):
+        c.stage = 'Meeting'
+        c.stage_changed_at = datetime.utcnow()
+    result_str = (data.get('result', '') or '').lower()
+    if any(w in result_str for w in ('signé', 'signe', 'convention', 'accord')) and c.stage not in ('Signed', 'Deployed') and not data.get('stage'):
+        c.stage = 'Signed'
+        c.stage_changed_at = datetime.utcnow()
+    # Activity score boost
     boost_map = {'Appel': 8, 'Email': 5, 'RDV': 20, 'LinkedIn': 5, 'Relance': 3}
     boost = boost_map.get(c.action_type, 5)
     if data.get('result') and 'réponse' in data['result'].lower():
         boost += 10
-    c.score = min(100, (c.score or 50) + boost)
+    c.score_activity = min(100, (c.score_activity or 20) + boost)
+    _recompute_scores(c)
     db.session.commit()
     return jsonify(c.to_dict())
 
@@ -642,9 +742,12 @@ def api_mission():
         return score + seg_bonus + overdue_bonus + today_bonus + never_bonus
 
     actions = sorted(
-        [c for c in contacts if not c.done and c.segment in ('Strategic', 'Quick Win', 'Partner')],
+        [c for c in contacts if not c.done and not c.archived and (
+            c.segment in ('Strategic', 'Quick Win', 'Partner') or
+            (c.next_action_date and c.next_action_date <= today_str)
+        )],
         key=priority_score, reverse=True
-    )[:12]
+    )[:15]
 
     # Stuck contacts (no activity in 14+ days, not done)
     stuck = []
@@ -893,6 +996,123 @@ def api_stats():
         'valid_emails': valid_emails, 'signed': signed, 'overdue': overdue
     })
 
+
+# ─────────────────────────────────────────── ARCHIVE / QUALITY / DUPLICATES
+
+@app.route('/api/contacts/<int:cid>/archive', methods=['POST'])
+@login_required
+def api_archive_contact(cid):
+    c = Contact.query.get_or_404(cid)
+    c.archived = True
+    c.segment = 'Dormant'
+    db.session.commit()
+    return jsonify({'ok': True})
+
+@app.route('/api/contacts/<int:cid>/reactivate', methods=['POST'])
+@login_required
+def api_reactivate_contact(cid):
+    c = Contact.query.get_or_404(cid)
+    c.archived = False
+    _recompute_scores(c)
+    c.segment = _auto_segment(c)
+    db.session.commit()
+    return jsonify(c.to_dict())
+
+@app.route('/api/contacts/archives')
+@login_required
+def api_archives():
+    contacts = Contact.query.filter_by(archived=True).order_by(Contact.score_commercial.desc()).all()
+    return jsonify([c.to_dict() for c in contacts])
+
+@app.route('/api/contacts/duplicates')
+@login_required
+def api_duplicates():
+    from collections import defaultdict
+    contacts = Contact.query.filter_by(archived=False).all()
+    FREE_PROVIDERS = {'gmail.com','yahoo.fr','yahoo.com','hotmail.fr','hotmail.com',
+                      'orange.fr','free.fr','laposte.net','outlook.com','outlook.fr','wanadoo.fr'}
+    groups = defaultdict(list)
+    for c in contacts:
+        key = re.sub(r'\b(sarl|sas|sa|eurl|sasu|sci|snc|ste|groupe|group)\b', '',
+                     re.sub(r'[^a-z0-9]', '', (c.company or '').lower().strip()))
+        if len(key) >= 4:
+            groups[f'co:{key}'].append(c)
+    for c in contacts:
+        if c.email and '@' in c.email:
+            domain = c.email.split('@')[1].lower()
+            if domain not in FREE_PROVIDERS:
+                groups[f'domain:{domain}'].append(c)
+    seen_ids = set()
+    result = []
+    for key, group in groups.items():
+        unique = []
+        for c in group:
+            if c.id not in seen_ids:
+                unique.append(c)
+        if len(unique) >= 2:
+            for c in unique:
+                seen_ids.add(c.id)
+            result.append([c.to_dict() for c in unique])
+    return jsonify(result)
+
+@app.route('/api/contacts/to-enrich')
+@login_required
+def api_to_enrich():
+    contacts = Contact.query.filter_by(archived=False).all()
+    result = []
+    for c in contacts:
+        reasons = []
+        if not c.email and not c.phone:
+            reasons.append('Ni email ni téléphone')
+        elif not c.email:
+            reasons.append('Email manquant')
+        elif (c.email_status or '').lower() in ('invalid', 'unknown', ''):
+            reasons.append('Email non vérifié')
+        if not c.phone:
+            reasons.append('Téléphone manquant')
+        if not c.decision_maker:
+            reasons.append('Décideur non identifié')
+        if not c.poei_offer:
+            reasons.append('Offre POEI non définie')
+        if reasons:
+            d = c.to_dict()
+            d['missing_reasons'] = reasons
+            result.append(d)
+    result.sort(key=lambda x: -x.get('score_commercial', 0))
+    return jsonify(result)
+
+@app.route('/api/contacts/quick-wins')
+@login_required
+def api_quick_wins():
+    today_str = date.today().isoformat()
+    week_str = (date.today() + timedelta(days=7)).isoformat()
+    contacts = Contact.query.filter_by(archived=False).all()
+    result = []
+    for c in contacts:
+        has_contact = bool(c.email or c.phone)
+        has_dm = bool(c.decision_maker)
+        has_action = bool(c.next_action_date)
+        score = c.score_commercial or 0
+        in_pipeline = (c.stage or 'Prospect') not in ('Prospect',)
+        if has_contact and (has_dm or score >= 50) and has_action and (in_pipeline or score >= 60):
+            d = c.to_dict()
+            d['is_overdue'] = bool(c.next_action_date and c.next_action_date < today_str)
+            d['is_soon'] = bool(c.next_action_date and c.next_action_date <= week_str)
+            result.append(d)
+    result.sort(key=lambda x: (-(1 if x['is_overdue'] else 0), -(1 if x['is_soon'] else 0), -x['score_commercial']))
+    return jsonify(result)
+
+@app.route('/api/contacts/rescore', methods=['POST'])
+@login_required
+def api_rescore():
+    u = current_user()
+    if u.role != 'admin':
+        return jsonify({'error': 'Accès refusé'}), 403
+    contacts = Contact.query.all()
+    for c in contacts:
+        _recompute_scores(c)
+    db.session.commit()
+    return jsonify({'ok': True, 'rescored': len(contacts)})
 
 @app.route('/health')
 def health():
@@ -1407,6 +1627,20 @@ def api_save_settings():
 def _auto_setup():
     try:
         db.create_all()
+        # Add new columns to existing tables (safe no-op if already exists)
+        with db.engine.connect() as conn:
+            for col, defn in [
+                ('archived',         'BOOLEAN DEFAULT FALSE'),
+                ('owner_id',         'INTEGER'),
+                ('score_commercial', 'INTEGER DEFAULT 0'),
+                ('score_activity',   'INTEGER DEFAULT 20'),
+                ('data_quality',     'INTEGER DEFAULT 0'),
+            ]:
+                try:
+                    conn.execute(db.text(f'ALTER TABLE contact ADD COLUMN {col} {defn}'))
+                    conn.commit()
+                except Exception:
+                    pass
         if not User.query.filter_by(username='admin').first():
             pw = bcrypt.generate_password_hash('Admin2026!').decode()
             db.session.add(User(

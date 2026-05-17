@@ -14,8 +14,8 @@ const G = {
   view: 'mission',
   sector: null,
   q: '',
-  filters: {seg:'', pri:'', at:'', new:''},
-  sf: 'score', sd: -1,
+  filters: {seg:'', pri:'', at:'', new:'', sector:'', reachable:'', activity:'', dm:''},
+  sf: 'score_commercial', sd: -1,
   selId: null,
   planState: {},
   metrics: null,
@@ -81,12 +81,19 @@ function buildSectorSidebar() {
 
 function updSidebar() {
   const td = today();
-  const ov = G.contacts.filter(c => !isDone(c) && (isOv(c,td)||isTd(c,td)));
+  const active = G.contacts.filter(c => !c.archived);
+  const ov = active.filter(c => !isDone(c) && (isOv(c,td)||isTd(c,td)));
   const bdgToday = document.getElementById('bdg-today');
   if (bdgToday) { bdgToday.textContent = ov.length || '0'; bdgToday.style.display = ''; }
-  document.getElementById('ss-str').textContent = G.contacts.filter(c=>c.segment==='Strategic').length;
-  document.getElementById('ss-qw').textContent  = G.contacts.filter(c=>c.segment==='Quick Win').length;
-  document.getElementById('ss-si').textContent  = G.contacts.filter(c=>c.stage==='Signed'||c.stage==='Deployed').length;
+  const strCount = active.filter(c=>c.segment==='Strategic').length;
+  const qwCount  = active.filter(c=>c.segment==='Quick Win').length;
+  document.getElementById('ss-str').textContent = strCount;
+  document.getElementById('ss-qw').textContent  = qwCount;
+  document.getElementById('ss-si').textContent  = active.filter(c=>c.stage==='Signed'||c.stage==='Deployed').length;
+  const bdgStr = document.getElementById('bdg-strategic');
+  if(bdgStr) bdgStr.textContent = strCount || '0';
+  const bdgQw = document.getElementById('bdg-qw');
+  if(bdgQw) bdgQw.textContent = qwCount || '0';
 }
 
 // ════════════════════════════════════════════════════════════════ NAVIGATION
@@ -96,6 +103,10 @@ const VIEW_TITLES = {
   market:'🌍 Étude de Marché',partners:'🤝 Partenaires & Prescripteurs',
   strategic:'⭐ Comptes Stratégiques','all-contacts':'👥 Tous les contacts',
   'new-targets':'🔴 Nouvelles Cibles POEI','sequences':'⚡ Séquences Prospection',
+  'quick-wins':'⚡ Quick Wins — Conversions rapides',
+  'enrich':'⚙ Contacts à enrichir',
+  'duplicates':'🔁 Doublons à traiter',
+  'archives':'🗄 Archives / Dormants',
   templates:'✉️ Templates Email',scripts:'📞 Scripts Appels',
   plan90:'📅 Plan 90 Jours',metrics:'📈 Métriques & KPIs',
   settings:'⚙️ Paramètres & Équipe','email-suivi':'📧 Suivi Emails & Relances'
@@ -115,6 +126,10 @@ function buildFilters() {
   let h = '';
   segs.forEach(s => { h += `<button class="fb" data-fk="seg" data-fv="${s}" onclick="tF('seg','${s}')">${s}</button>`; });
   ['HIGH','MEDIUM','LOW'].forEach(p => { h += `<button class="fb" data-fk="pri" data-fv="${p}" onclick="tF('pri','${p}')">${p}</button>`; });
+  h += `<button class="fb" data-fk="dm" data-fv="1" onclick="tF('dm','1')" title="Décideur identifié">👤 Décideur</button>`;
+  h += `<button class="fb" data-fk="reachable" data-fv="email" onclick="tF('reachable','email')" title="Email valide">✉ Email OK</button>`;
+  h += `<button class="fb" data-fk="reachable" data-fv="phone" onclick="tF('reachable','phone')" title="Téléphone renseigné">📞 Tel</button>`;
+  h += `<button class="fb" data-fk="activity" data-fv="stale" onclick="tF('activity','stale')" style="border-color:#F5A623;color:#F5A623" title="Sans activité depuis +45j">⚠ Inactif 45j+</button>`;
   h += `<button class="fb" data-fk="new" data-fv="1" onclick="tF('new','1')" style="border-color:#E8500A;color:#E8500A">🔴 Nouveaux</button>`;
   fr.innerHTML = h;
 }
@@ -137,6 +152,13 @@ function applyF(list) {
   if(G.filters.pri) l = l.filter(c=>c.priority===G.filters.pri);
   if(G.filters.at)  l = l.filter(c=>c.action_type===G.filters.at);
   if(G.filters.new) l = l.filter(c=>c.alert==='🔴 NOUVEAU');
+  if(G.filters.dm)  l = l.filter(c=>c.decision_maker);
+  if(G.filters.reachable === 'email') l = l.filter(c=>c.email && c.email_status !== 'invalid');
+  if(G.filters.reachable === 'phone') l = l.filter(c=>c.phone);
+  if(G.filters.activity === 'stale') {
+    const cutoff = new Date(Date.now() - 45*86400000).toISOString();
+    l = l.filter(c => !c.last_activity_at || c.last_activity_at < cutoff);
+  }
   return l;
 }
 
@@ -151,6 +173,10 @@ function render() {
   else if(G.view==='tasks')        load(loadTasks);
   else if(G.view==='growth')       load(loadGrowthDashboard);
   else if(G.view==='dashboard')    load(loadGrowthDashboard);
+  else if(G.view==='quick-wins')   load(loadQuickWins);
+  else if(G.view==='enrich')       load(loadEnrich);
+  else if(G.view==='duplicates')   load(loadDuplicates);
+  else if(G.view==='archives')     load(loadArchives);
   else if(G.view==='pipeline')     el.innerHTML = rPipeline();
   else if(G.view==='market')       el.innerHTML = rMarketStudy();
   else if(G.view==='partners')     el.innerHTML = rPartners();
@@ -193,6 +219,25 @@ function scoreTag(n) {
   const cls = n>=80?'s-hi':n>=60?'s-mi':'';
   return `<span class="score ${cls}">${n}/100</span>`;
 }
+function qualityDot(c) {
+  const q = c.data_quality ?? 0;
+  const col = q>=3?'#0F9D58':q>=2?'#F5A623':'#E8500A';
+  const tips = [];
+  if(!c.email||c.email_status==='invalid') tips.push('email');
+  if(!c.phone) tips.push('tel');
+  if(!c.decision_maker) tips.push('décideur');
+  if(!c.poei_offer) tips.push('POEI');
+  const tip = tips.length ? `Manque : ${tips.join(', ')}` : 'Fiche complète';
+  return `<span title="${tip}" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${col};flex-shrink:0"></span>`;
+}
+function stagnationBadge(c) {
+  if(!c.last_activity_at) return '<span style="font-size:9px;color:#E8500A;background:#E8500A18;padding:1px 5px;border-radius:8px">Jamais contacté</span>';
+  const days = Math.floor((Date.now() - new Date(c.last_activity_at)) / 86400000);
+  if(days >= 90) return `<span style="font-size:9px;color:#D93025;background:#D9302518;padding:1px 5px;border-radius:8px">Inactif ${days}j</span>`;
+  if(days >= 45) return `<span style="font-size:9px;color:#F5A623;background:#F5A62318;padding:1px 5px;border-radius:8px">Inactif ${days}j</span>`;
+  return '';
+}
+function cScore(c) { return c.score_commercial ?? c.score ?? 0; }
 function normSec(s) {
   return (s || '').replace(/️/g, '').trim();
 }
@@ -229,6 +274,186 @@ function quickBtns(c, stop=true) {
   const em = c.email&&c.email_status!=='invalid' ? `<a href="mailto:${esc(c.email)}" class="btn btn-email" onclick="${sp}">✉</a>` : '';
   const li = c.linkedin ? `<a href="${esc(c.linkedin)}" target="_blank" class="btn btn-li" onclick="${sp}">in</a>` : '';
   return ph+em+li;
+}
+
+// ════════════════════════════════════════════════════════════════ QUICK WINS
+
+async function loadQuickWins() {
+  const data = await apiFetch('/api/contacts/quick-wins');
+  if(!data) return;
+  document.getElementById('content').innerHTML = rQuickWins(data);
+}
+
+function rQuickWins(list) {
+  if(!list.length) return `<div class="empty"><div class="ei">⚡</div><h3>Aucun Quick Win identifié</h3><p>Les Quick Wins sont des contacts joignables, avec décideur, en cours de pipeline. Enrichissez les fiches pour en générer.</p></div>`;
+  const overdue = list.filter(c=>c.is_overdue).length;
+  const soon    = list.filter(c=>c.is_soon && !c.is_overdue).length;
+  let h = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:18px">
+    <div style="background:#fff;border:1px solid var(--bd);border-radius:8px;padding:13px 16px;border-top:3px solid #0F9D58">
+      <div style="font-size:28px;font-weight:900;color:#0F9D58;line-height:1">${list.length}</div>
+      <div style="font-size:10px;font-weight:700;color:var(--mu);text-transform:uppercase;letter-spacing:.6px;margin-top:4px">Quick Wins</div>
+    </div>
+    <div style="background:#fff;border:1px solid var(--bd);border-radius:8px;padding:13px 16px;border-top:3px solid #E8500A">
+      <div style="font-size:28px;font-weight:900;color:#E8500A;line-height:1">${overdue}</div>
+      <div style="font-size:10px;font-weight:700;color:var(--mu);text-transform:uppercase;letter-spacing:.6px;margin-top:4px">En retard</div>
+    </div>
+    <div style="background:#fff;border:1px solid var(--bd);border-radius:8px;padding:13px 16px;border-top:3px solid #F5A623">
+      <div style="font-size:28px;font-weight:900;color:#F5A623;line-height:1">${soon}</div>
+      <div style="font-size:10px;font-weight:700;color:var(--mu);text-transform:uppercase;letter-spacing:.6px;margin-top:4px">Cette semaine</div>
+    </div>
+  </div>`;
+  h += '<div class="tbl-wrap"><table><thead><tr><th>Entreprise</th><th>Contact</th><th>Score</th><th>Stade</th><th>Prochaine action</th><th>Urgence</th><th>Contact</th></tr></thead><tbody>';
+  list.forEach(c => {
+    const col = secColor(c.sector||'');
+    const init = (c.company||'?').trim().charAt(0).toUpperCase();
+    const urgTag = c.is_overdue
+      ? '<span style="font-size:9px;background:#E8500A22;color:#E8500A;padding:2px 6px;border-radius:8px;font-weight:700">EN RETARD</span>'
+      : c.is_soon
+      ? '<span style="font-size:9px;background:#F5A62322;color:#F5A623;padding:2px 6px;border-radius:8px;font-weight:700">Cette semaine</span>'
+      : '';
+    h += `<tr onclick="openC(${c.id})">
+      <td><div style="display:flex;align-items:center;gap:9px"><div class="co-av" style="background:${col}">${init}</div><div><div style="font-weight:800;font-size:12.5px;display:flex;align-items:center;gap:5px">${esc(c.company)} ${qualityDot(c)}</div><div style="font-size:10.5px;color:var(--mu)">${esc(c.sector||'')}</div></div></div></td>
+      <td>${c.decision_maker?'<span class="dm-dot"></span>':''}${esc(c.name)}<div style="font-size:10.5px;color:var(--mu)">${esc((c.title||'').substring(0,35))}</div></td>
+      <td>${scoreTag(cScore(c))}</td>
+      <td style="font-size:11.5px;color:var(--mu)">${SL[c.stage]||c.stage||'Prospect'}</td>
+      <td>${atTag(c.action_type)}<div style="font-size:10.5px;color:var(--mu);margin-top:2px">${esc((c.next_action||'').substring(0,42))}</div>
+          <div style="font-size:10px;color:var(--mu)">${c.next_action_date||''}</div></td>
+      <td>${urgTag}</td>
+      <td onclick="event.stopPropagation()" style="white-space:nowrap">${quickBtns(c)}
+        <button onclick="event.stopPropagation();openDoneFor(${c.id})" style="background:#0F9D5822;border:1px solid #0F9D5844;color:#0F9D58;border-radius:4px;padding:3px 8px;font-size:11px;cursor:pointer;margin-left:3px">✓ Fait</button>
+      </td>
+    </tr>`;
+  });
+  return h + '</tbody></table></div>';
+}
+
+// ════════════════════════════════════════════════════════════════ ENRICHISSEMENT
+
+async function loadEnrich() {
+  const data = await apiFetch('/api/contacts/to-enrich');
+  if(!data) return;
+  document.getElementById('content').innerHTML = rEnrich(data);
+}
+
+function rEnrich(list) {
+  if(!list.length) return `<div class="empty"><div class="ei">⚙</div><h3>Toutes les fiches sont complètes</h3><p>Excellent ! Chaque contact a email, téléphone, décideur et offre POEI renseignés.</p></div>`;
+  const noContact = list.filter(c=>!c.email&&!c.phone).length;
+  const noDm      = list.filter(c=>!c.decision_maker).length;
+  const noPoei    = list.filter(c=>!c.poei_offer).length;
+  let h = `<div style="background:#FFF0EA;border:1px solid #E8500A22;border-left:3px solid #E8500A;border-radius:6px;padding:10px 14px;margin-bottom:16px;font-size:12px;color:#7a2800">
+    ⚙ <strong>${list.length} contacts à enrichir</strong> — priorité : les contacts avec le meilleur score commercial. ${noContact} sans email ni téléphone · ${noDm} sans décideur · ${noPoei} sans offre POEI.
+  </div>`;
+  h += '<div class="tbl-wrap"><table><thead><tr><th>Entreprise</th><th>Contact</th><th>Score</th><th>Segment</th><th>Manque</th><th>Action</th></tr></thead><tbody>';
+  list.forEach(c => {
+    const col = secColor(c.sector||'');
+    const init = (c.company||'?').trim().charAt(0).toUpperCase();
+    const missingHtml = (c.missing_reasons||[]).map(r=>`<span style="font-size:10px;background:#FEF3E2;color:#B07700;padding:1px 6px;border-radius:8px;margin-right:3px">${r}</span>`).join('');
+    h += `<tr onclick="openC(${c.id})">
+      <td><div style="display:flex;align-items:center;gap:9px"><div class="co-av" style="background:${col}">${init}</div><div><div style="font-weight:800;font-size:12.5px">${esc(c.company)}</div><div style="font-size:10.5px;color:var(--mu)">${esc(c.sector||'')}</div></div></div></td>
+      <td>${esc(c.name)}<div style="font-size:10.5px;color:var(--mu)">${esc((c.title||'').substring(0,35))}</div></td>
+      <td>${scoreTag(cScore(c))}</td>
+      <td>${segTag(c.segment)}</td>
+      <td>${missingHtml}</td>
+      <td onclick="event.stopPropagation()">
+        <button onclick="openC(${c.id})" style="background:#1A73E822;border:1px solid #1A73E844;color:#1A73E8;border-radius:4px;padding:3px 8px;font-size:11px;cursor:pointer">✏ Enrichir</button>
+        <button onclick="archiveContact(${c.id})" style="background:#78909C22;border:1px solid #78909C44;color:#78909C;border-radius:4px;padding:3px 8px;font-size:11px;cursor:pointer;margin-left:3px">🗄 Archiver</button>
+      </td>
+    </tr>`;
+  });
+  return h + '</tbody></table></div>';
+}
+
+// ════════════════════════════════════════════════════════════════ DOUBLONS
+
+async function loadDuplicates() {
+  const data = await apiFetch('/api/contacts/duplicates');
+  if(!data) return;
+  document.getElementById('content').innerHTML = rDuplicates(data);
+}
+
+function rDuplicates(groups) {
+  if(!groups.length) return `<div class="empty"><div class="ei">🔁</div><h3>Aucun doublon détecté</h3><p>La base est propre — aucun doublon par nom d'entreprise ou domaine email.</p></div>`;
+  let h = `<div style="background:#EFF6FF;border:1px solid #1A73E822;border-left:3px solid #1A73E8;border-radius:6px;padding:10px 14px;margin-bottom:16px;font-size:12px;color:#1a3a7a">
+    🔁 <strong>${groups.length} groupe${groups.length>1?'s':''} de doublons détectés</strong> — vérifiez et archivez les doublons. La suppression reste manuelle via la fiche contact.
+  </div>`;
+  groups.forEach((group, gi) => {
+    h += `<div style="background:#fff;border:1px solid var(--bd);border-radius:8px;margin-bottom:12px;overflow:hidden">
+      <div style="background:var(--bg);padding:8px 16px;font-size:11px;font-weight:700;color:var(--mu);border-bottom:1px solid var(--bd)">
+        Groupe ${gi+1} — ${group.length} contacts · "${esc(group[0].company)}"
+      </div>`;
+    group.forEach(c => {
+      const col = secColor(c.sector||'');
+      const init = (c.company||'?').trim().charAt(0).toUpperCase();
+      h += `<div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--bd);cursor:pointer" onclick="openC(${c.id})">
+        <div class="co-av" style="background:${col};flex-shrink:0">${init}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:800;font-size:12.5px">${esc(c.company)}</div>
+          <div style="font-size:11px;color:var(--mu)">${esc(c.name)} · ${esc(c.title||'')} · ${esc(c.email||'—')} · ${esc(c.phone||'—')}</div>
+          <div style="margin-top:4px">${segTag(c.segment)} ${scoreTag(cScore(c))} ${qualityDot(c)}</div>
+        </div>
+        <div style="display:flex;gap:6px;flex-shrink:0" onclick="event.stopPropagation()">
+          <button onclick="openC(${c.id})" style="background:#1A73E822;border:1px solid #1A73E844;color:#1A73E8;border-radius:4px;padding:4px 10px;font-size:11px;cursor:pointer">Ouvrir</button>
+          <button onclick="archiveContact(${c.id})" style="background:#E8500A22;border:1px solid #E8500A44;color:#E8500A;border-radius:4px;padding:4px 10px;font-size:11px;cursor:pointer">🗄 Archiver</button>
+        </div>
+      </div>`;
+    });
+    h += '</div>';
+  });
+  return h;
+}
+
+// ════════════════════════════════════════════════════════════════ ARCHIVES
+
+async function loadArchives() {
+  const data = await apiFetch('/api/contacts/archives');
+  if(!data) return;
+  document.getElementById('content').innerHTML = rArchives(data);
+}
+
+function rArchives(list) {
+  if(!list.length) return `<div class="empty"><div class="ei">🗄</div><h3>Aucun contact archivé</h3><p>Les contacts archivés sont masqués de toutes les vues actives et n'apparaissent que ici.</p></div>`;
+  let h = `<div style="background:#F9F9F8;border:1px solid var(--bd);border-left:3px solid #78909C;border-radius:6px;padding:10px 14px;margin-bottom:16px;font-size:12px;color:var(--mu)">
+    🗄 <strong>${list.length} contact${list.length>1?'s':''} archivé${list.length>1?'s':''}</strong> — masqués des vues actives. Cliquer sur "Réactiver" pour les remettre en portefeuille.
+  </div>`;
+  h += '<div class="tbl-wrap"><table><thead><tr><th>Entreprise</th><th>Contact</th><th>Score</th><th>Secteur</th><th>Notes</th><th>Action</th></tr></thead><tbody>';
+  list.forEach(c => {
+    const col = secColor(c.sector||'');
+    const init = (c.company||'?').trim().charAt(0).toUpperCase();
+    h += `<tr style="opacity:.75" onclick="openC(${c.id})">
+      <td><div style="display:flex;align-items:center;gap:9px"><div class="co-av" style="background:${col}">${init}</div><div><div style="font-weight:800;font-size:12.5px">${esc(c.company)}</div><div style="font-size:10.5px;color:var(--mu)">${esc(c.sector||'')}</div></div></div></td>
+      <td>${esc(c.name)}<div style="font-size:10.5px;color:var(--mu)">${esc(c.title||'')}</div></td>
+      <td>${scoreTag(cScore(c))}</td>
+      <td style="font-size:11px;color:var(--mu)">${esc(c.sector||'—')}</td>
+      <td style="font-size:11px;color:var(--mu);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc((c.notes||'').substring(0,60))}</td>
+      <td onclick="event.stopPropagation()">
+        <button onclick="reactivateContact(${c.id})" style="background:#0F9D5822;border:1px solid #0F9D5844;color:#0F9D58;border-radius:4px;padding:3px 8px;font-size:11px;cursor:pointer">↩ Réactiver</button>
+      </td>
+    </tr>`;
+  });
+  return h + '</tbody></table></div>';
+}
+
+// ════════════════════════════════════════════════════════════════ ARCHIVE ACTIONS
+
+async function archiveContact(id) {
+  if(!confirm('Archiver ce contact ? Il sera masqué de toutes les vues actives mais pas supprimé.')) return;
+  const r = await apiFetch(`/api/contacts/${id}/archive`, {method:'POST'});
+  if(r?.ok) {
+    G.contacts = G.contacts.map(c => c.id===id ? {...c, archived:true, segment:'Dormant'} : c);
+    updSidebar();
+    render();
+    toast('Contact archivé', 'success');
+  }
+}
+
+async function reactivateContact(id) {
+  const r = await apiFetch(`/api/contacts/${id}/reactivate`, {method:'POST'});
+  if(r) {
+    G.contacts = G.contacts.map(c => c.id===id ? {...c, ...r} : c);
+    updSidebar();
+    render();
+    toast('Contact réactivé ✓', 'success');
+  }
 }
 
 // ════════════════════════════════════════════════════════════════ DASHBOARD
@@ -461,11 +686,16 @@ function rNewTargets() {
 
 // ════════════════════════════════════════════════════════════════ STRATEGIC
 function rStrategic() {
-  const top15 = [...G.contacts].sort((a,b)=>b.score-a.score);
+  const strategics = G.contacts.filter(c => c.segment === 'Strategic' && !c.archived);
   const seen={};const top=[];
-  top15.forEach(c=>{ if(!seen[c.company]){seen[c.company]=true;top.push(c);} });
-  const list = top.slice(0,15);
-  let h = `<div style="margin-bottom:12px;font-size:12.5px;color:var(--mu)">Top 15 comptes par score · Cliquer pour ouvrir le contact</div>`;
+  [...strategics].sort((a,b) => cScore(b) - cScore(a)).forEach(c=>{ if(!seen[c.company]){seen[c.company]=true;top.push(c);} });
+  const list = top;
+  const isEmpty = list.length === 0;
+  let h = `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+    <div style="font-size:12.5px;color:var(--mu)">${list.length} compte${list.length>1?'s':''} stratégique${list.length>1?'s':''} · Score commercial · Cliquer pour ouvrir</div>
+    <div style="font-size:11px;color:var(--mu)">Segment auto-calculé (décideur + secteur prioritaire + joignabilité)</div>
+  </div>`;
+  if(isEmpty) return h + `<div class="empty"><div class="ei">⭐</div><h3>Aucun compte stratégique</h3><p>Les comptes stratégiques sont calculés automatiquement : secteur prioritaire + décideur identifié + email ou téléphone valide.</p></div>`;
   h += '<div class="strat-grid">';
   list.forEach((c,i) => {
     const col = secColor(c.sector);
@@ -475,8 +705,8 @@ function rStrategic() {
       <div style="display:flex;align-items:center;gap:9px;margin-bottom:10px"><div class="co-av" style="background:${col}">${init}</div><div class="strat-co" style="margin-bottom:0">${esc(c.company)}</div></div>
       <div class="strat-ct">${esc(c.name)} · ${esc((c.title||'').substring(0,40))}${(c.title||'').length>40?'…':''}</div>
       <div class="strat-score">
-        <div style="font-size:13px;font-weight:900;color:${c.score>=80?'var(--g)':'var(--y)'}">${c.score}</div>
-        <div class="strat-bar-wrap"><div class="strat-bar" style="width:${c.score}%;background:${c.score>=80?'var(--g)':'var(--y)'}"></div></div>
+        <div style="font-size:13px;font-weight:900;color:${cScore(c)>=80?'var(--g)':'var(--y)'}">${cScore(c)}</div>
+        <div class="strat-bar-wrap"><div class="strat-bar" style="width:${cScore(c)}%;background:${cScore(c)>=80?'var(--g)':'var(--y)'}"></div></div>
       </div>
       <div class="strat-poei">${esc(c.poei_offer||'—')}</div>
       <div class="strat-meta">
@@ -494,8 +724,8 @@ function rStrategic() {
 // ════════════════════════════════════════════════════════════════ SECTOR VIEW
 function rSector(sec) {
   const secData = ALL_SECTORS.find(s=>s.name===sec||sec.includes(s.icon?.split(' ')[0])||s.name.toLowerCase().includes(sec.toLowerCase().replace(/[^a-z]/g,'')));
-  let contacts = G.contacts.filter(c => c.sector===sec || (sec.includes('Autre')&&(c.sector==='🔷 Autre'||c.sector==='🛒 Commerce')));
-  contacts = applyF(contacts).sort((a,b)=>b.score-a.score);
+  let contacts = G.contacts.filter(c => !c.archived && (c.sector===sec || (sec.includes('Autre')&&(c.sector==='🔷 Autre'||c.sector==='🛒 Commerce'))));
+  contacts = applyF(contacts).sort((a,b)=>cScore(b)-cScore(a));
   const col = secColor(sec);
   let h = '';
   if(secData) {
@@ -529,13 +759,16 @@ function rSector(sec) {
 
 // ════════════════════════════════════════════════════════════════ ALL CONTACTS
 function rAllContacts() {
-  let list = applyF(G.contacts);
+  let list = applyF(G.contacts.filter(c=>!c.archived));
   list = [...list].sort((a,b) => {
-    const fa=a[G.sf]??0, fb=b[G.sf]??0;
+    const sf = G.sf === 'score' ? 'score_commercial' : G.sf;
+    const fa = sf==='score_commercial' ? cScore(a) : (a[sf]??0);
+    const fb = sf==='score_commercial' ? cScore(b) : (b[sf]??0);
     return typeof fa==='number'?(fb-fa)*G.sd:String(fa).localeCompare(String(fb))*G.sd;
   });
   const h = rContactsTable(list);
-  return `<div style="margin-bottom:8px;font-size:12px;color:var(--mu)">${list.length} contact${list.length>1?'s':''} affichés sur ${G.contacts.length}</div>`+h;
+  const total = G.contacts.filter(c=>!c.archived).length;
+  return `<div style="margin-bottom:8px;font-size:12px;color:var(--mu)">${list.length} contact${list.length>1?'s':''} affichés sur ${total} actifs</div>`+h;
 }
 
 function rContactsTable(list) {
@@ -544,9 +777,9 @@ function rContactsTable(list) {
   let h = `<div class="tbl-wrap"><table><thead><tr>
     <th onclick="sortBy('company')">Entreprise${G.sf==='company'?ar:''}</th>
     <th onclick="sortBy('name')">Contact${G.sf==='name'?ar:''}</th>
-    <th onclick="sortBy('score')">Score${G.sf==='score'?ar:''}</th>
+    <th onclick="sortBy('score_commercial')">Score${G.sf==='score_commercial'?ar:''}</th>
     <th>Segment</th>
-    <th onclick="sortBy('stage')">Stade</th>
+    <th onclick="sortBy('stage')">Stade${G.sf==='stage'?ar:''}</th>
     <th>Prochaine action</th>
     <th>Contact</th>
   </tr></thead><tbody>`;
@@ -554,9 +787,9 @@ function rContactsTable(list) {
     const col = secColor(c.sector||'');
     const init = (c.company||'?').trim().charAt(0).toUpperCase();
     h += `<tr onclick="openC(${c.id})">
-      <td><div style="display:flex;align-items:center;gap:9px"><div class="co-av" style="background:${col}">${init}</div><div><div style="font-weight:800;font-size:12.5px">${hl(c.company,G.q)}</div><div style="font-size:10.5px;color:var(--mu)">${esc(c.sector||'')}</div></div></div></td>
+      <td><div style="display:flex;align-items:center;gap:9px"><div class="co-av" style="background:${col}">${init}</div><div><div style="font-weight:800;font-size:12.5px;display:flex;align-items:center;gap:5px">${hl(c.company,G.q)} ${qualityDot(c)}</div><div style="font-size:10.5px;color:var(--mu)">${esc(c.sector||'')} ${stagnationBadge(c)}</div></div></div></td>
       <td>${c.decision_maker?'<span class="dm-dot"></span>':''}${hl(c.name,G.q)}<div style="font-size:10.5px;color:var(--mu)">${esc((c.title||'').substring(0,35))}${(c.title||'').length>35?'…':''}</div></td>
-      <td>${scoreTag(c.score)}</td>
+      <td>${scoreTag(cScore(c))}</td>
       <td>${segTag(c.segment)}</td>
       <td style="font-size:11.5px;color:var(--mu)">${SL[c.stage]||c.stage||'Prospect'}</td>
       <td>${atTag(c.action_type)}<div style="font-size:10.5px;color:var(--mu);margin-top:2px">${esc((c.next_action||'').substring(0,42))}${(c.next_action||'').length>42?'…':''}</div></td>
@@ -3055,11 +3288,24 @@ async function init() {
 
     document.getElementById('bdg-tpl').textContent = ALL_TEMPLATES.length;
     document.getElementById('bdg-scr').textContent = ALL_SCRIPTS.length;
-    document.getElementById('bdg-total').textContent = G.contacts.length;
-    const newCount = G.contacts.filter(c=>c.alert==='🔴 NOUVEAU').length;
+    const active = G.contacts.filter(c=>!c.archived);
+    document.getElementById('bdg-total').textContent = active.length;
+    const newCount = active.filter(c=>c.alert==='🔴 NOUVEAU').length;
     document.getElementById('bdg-new').textContent = newCount || '0';
-    const partCount = G.contacts.filter(c=>c.segment==='Partner').length;
+    const partCount = active.filter(c=>c.segment==='Partner').length;
     document.getElementById('bdg-part').textContent = partCount || '0';
+    // Enrich + archive badges
+    const enrichCount = active.filter(c=>(!c.email&&!c.phone)||!c.decision_maker).length;
+    const bdgEnrich = document.getElementById('bdg-enrich');
+    if(bdgEnrich) bdgEnrich.textContent = enrichCount || '0';
+    const archCount = G.contacts.filter(c=>c.archived).length;
+    const bdgArch = document.getElementById('bdg-arch');
+    if(bdgArch) bdgArch.textContent = archCount || '0';
+    // Duplicates badge (async, non-blocking)
+    apiFetch('/api/contacts/duplicates').then(dups => {
+      const bdgDup = document.getElementById('bdg-dup');
+      if(bdgDup) bdgDup.textContent = (dups||[]).length || '0';
+    });
 
     const now = new Date();
     document.getElementById('sb-date').textContent = now.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
