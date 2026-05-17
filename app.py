@@ -55,6 +55,15 @@ db     = SQLAlchemy(app)
 bcrypt = Bcrypt(app)
 mail   = Mail(app)
 
+try:
+    from flask_limiter import Limiter
+    from flask_limiter.util import get_remote_address
+    limiter = Limiter(app=app, key_func=get_remote_address, default_limits=[])
+    LIMITER_ENABLED = True
+except ImportError:
+    limiter = None
+    LIMITER_ENABLED = False
+
 
 # ─────────────────────────────────────────── MODELS
 
@@ -888,15 +897,16 @@ def api_stats():
 @app.route('/health')
 def health():
     try:
-        user_count = User.query.count()
         db_ok = True
-    except Exception as e:
-        user_count = 0
+        db.session.execute(db.text('SELECT 1'))
+    except Exception:
         db_ok = False
-    return jsonify({'status':'ok','app':'PNFB CRM','version':'2.0','db':db_ok,'users':user_count})
+    return jsonify({'status':'ok','app':'PNFB CRM','version':'2.0','db':db_ok})
 
 @app.errorhandler(500)
 def err500(e):
+    if _is_prod:
+        return jsonify({'error': 'Erreur serveur interne'}), 500
     import traceback
     return jsonify({'error': str(e), 'detail': traceback.format_exc()}), 500
 
@@ -1413,6 +1423,9 @@ def _auto_setup():
 
 with app.app_context():
     _auto_setup()
+
+if LIMITER_ENABLED and limiter:
+    limiter.limit("10/minute")(auth_login)
 
 if __name__ == '__main__':
     app.run(debug=not _is_prod, port=5050)
