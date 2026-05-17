@@ -21,6 +21,8 @@ const G = {
   metrics: null,
   bulkSel: new Set(),
   formId: null,
+  page: 1,
+  perPage: 50,
 };
 
 let ALL_TEMPLATES = [];
@@ -138,13 +140,14 @@ function buildFilters() {
 }
 function tF(k,v) {
   G.filters[k] = G.filters[k]===v ? '' : v;
+  G.page = 1;
   document.querySelectorAll(`[data-fk="${k}"]`).forEach(b => b.classList.toggle('on', b.dataset.fv===G.filters[k]));
   render();
 }
 let _searchTimer = null;
 function onSearch(v) {
   clearTimeout(_searchTimer);
-  _searchTimer = setTimeout(() => { G.q = v.toLowerCase(); render(); }, 300);
+  _searchTimer = setTimeout(() => { G.q = v.toLowerCase(); G.page = 1; render(); }, 300);
 }
 
 function applyF(list) {
@@ -168,6 +171,7 @@ function applyF(list) {
 // ════════════════════════════════════════════════════════════════ RENDER
 function render() {
   const el = document.getElementById('content');
+  G._lastView = G.view;
   const load = (fn) => { el.innerHTML='<div class="loading-state"><div class="loading-spinner"></div></div>'; fn(); };
   if     (G.view==='mission')      load(loadMission);
   else if(G.view==='kanban')       load(loadKanban);
@@ -184,7 +188,7 @@ function render() {
   else if(G.view==='market')       el.innerHTML = rMarketStudy();
   else if(G.view==='partners')     el.innerHTML = rPartners();
   else if(G.view==='strategic')    el.innerHTML = rStrategic();
-  else if(G.view==='all-contacts') el.innerHTML = rAllContacts();
+  else if(G.view==='all-contacts') { if(G._lastView!=='all-contacts') G.page=1; el.innerHTML = rAllContacts(); }
   else if(G.view==='new-targets')  el.innerHTML = rNewTargets();
   else if(G.view==='sector')       el.innerHTML = rSector(G.sector);
   else if(G.view==='templates')    el.innerHTML = rTemplates();
@@ -770,6 +774,28 @@ function rSector(sec) {
 }
 
 // ════════════════════════════════════════════════════════════════ ALL CONTACTS
+function rPaginationBar(filtered, page, perPage, pages) {
+  if(pages <= 1) return '';
+  const from = (page-1)*perPage + 1;
+  const to   = Math.min(page*perPage, filtered);
+  let h = `<div style="display:flex;align-items:center;justify-content:space-between;margin-top:14px;padding:12px 0;border-top:1px solid var(--bd);flex-wrap:wrap;gap:8px">`;
+  h += `<div style="font-size:12px;color:var(--mu)">${from}–${to} sur <strong>${filtered}</strong> contacts</div>`;
+  h += `<div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">`;
+  const btn = (label, p, active, disabled) =>
+    `<button onclick="${disabled?'':'goPage('+p+')'}" style="min-width:32px;padding:5px 10px;border:1px solid ${active?'var(--ac)':disabled?'var(--bd)':'var(--bd)'};border-radius:6px;background:${active?'var(--ac)':disabled?'var(--bg)':'#fff'};color:${active?'#fff':disabled?'var(--mu2)':'var(--tx)'};cursor:${disabled?'default':'pointer'};font-size:12px;font-weight:${active?700:400};transition:.15s">${label}</button>`;
+  h += btn('‹', page-1, false, page<=1);
+  for(let p=1; p<=pages; p++) {
+    if(pages > 7 && p > 2 && p < pages-1 && Math.abs(p-page) > 1) {
+      if(p===3 || p===pages-2) h += `<span style="color:var(--mu2);font-size:12px;padding:0 2px">…</span>`;
+      continue;
+    }
+    h += btn(p, p, p===page, false);
+  }
+  h += btn('›', page+1, false, page>=pages);
+  h += '</div></div>';
+  return h;
+}
+
 function rAllContacts() {
   let list = applyF(G.contacts.filter(c=>!c.archived));
   list = [...list].sort((a,b) => {
@@ -778,9 +804,14 @@ function rAllContacts() {
     const fb = sf==='score_commercial' ? cScore(b) : (b[sf]??0);
     return typeof fa==='number'?(fb-fa)*G.sd:String(fa).localeCompare(String(fb))*G.sd;
   });
-  const h = rContactsTable(list);
-  const total = G.contacts.filter(c=>!c.archived).length;
-  return `<div style="margin-bottom:8px;font-size:12px;color:var(--mu)">${list.length} contact${list.length>1?'s':''} affichés sur ${total} actifs</div>`+h;
+  const filtered = list.length;
+  const activeTotal = G.contacts.filter(c=>!c.archived).length;
+  const pages = Math.max(1, Math.ceil(filtered / G.perPage));
+  G.page = Math.max(1, Math.min(G.page, pages));
+  const paged = list.slice((G.page-1)*G.perPage, G.page*G.perPage);
+  const h = rContactsTable(paged);
+  const bar = rPaginationBar(filtered, G.page, G.perPage, pages);
+  return `<div style="margin-bottom:8px;font-size:12px;color:var(--mu)">${filtered} contact${filtered>1?'s':''} affichés sur ${activeTotal} actifs</div>${h}${bar}`;
 }
 
 function rContactsTable(list) {
@@ -810,7 +841,8 @@ function rContactsTable(list) {
   });
   return h+'</tbody></table></div>';
 }
-function sortBy(f) { if(G.sf===f)G.sd*=-1; else{G.sf=f;G.sd=-1;} render(); }
+function sortBy(f) { if(G.sf===f)G.sd*=-1; else{G.sf=f;G.sd=-1;} G.page=1; render(); }
+function goPage(p) { G.page=p; render(); document.getElementById('content').scrollIntoView({behavior:'smooth',block:'start'}); }
 
 // ════════════════════════════════════════════════════════════════ PIPELINE
 function rPipeline() {
