@@ -38,6 +38,11 @@ async function apiFetch(url, opts={}) {
   const headers = {'Content-Type':'application/json', ...(method !== 'GET' ? {'X-CSRFToken': _csrfToken} : {})};
   const r = await fetch(url, {headers, ...opts});
   if(r.status === 401) { window.location.href='/login'; return null; }
+  if(!r.ok) {
+    let msg = `Erreur ${r.status}`;
+    try { const j = await r.json(); msg = j.error || j.message || msg; } catch(_) {}
+    throw new Error(msg);
+  }
   return r.json();
 }
 async function apiPatch(cid, data) {
@@ -1114,11 +1119,16 @@ async function updStage(v) {
   const c = G.contacts.find(x=>x.id===G.selId);
   if(!c) return;
   const logEntry = {date: new Date().toLocaleString('fr-FR'), type:'Stage', result:`Stade → ${SL[v]||v}`};
-  const updated = await apiPatch(c.id, {stage: v});
-  if(updated) {
-    Object.assign(c, updated);
-    c.log = c.log || [];
-    c.log.push(logEntry);
+  try {
+    const updated = await apiPatch(c.id, {stage: v});
+    if(updated) {
+      Object.assign(c, updated);
+      c.log = c.log || [];
+      c.log.push(logEntry);
+      toast(`Stade → ${SL[v]||v}`, 'success');
+    }
+  } catch(e) {
+    toast(e.message || 'Erreur mise à jour stade', 'error');
   }
   updSidebar();
   render();
@@ -1131,8 +1141,8 @@ async function saveNote() {
   const c = G.contacts.find(x=>x.id===G.selId);
   if(!c) return;
   const logEntry = {date: new Date().toLocaleString('fr-FR'), type:'Note', result: note};
-  await fetch(`/api/contacts/${c.id}/log`, {
-    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(logEntry)
+  await apiFetch(`/api/contacts/${c.id}/log`, {
+    method:'POST', body: JSON.stringify(logEntry)
   });
   c.log = c.log || [];
   c.log.push(logEntry);
