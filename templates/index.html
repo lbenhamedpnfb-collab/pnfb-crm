@@ -192,12 +192,13 @@
       <span class="bc" id="bulk-count">0 sélectionnés</span>
       <select id="bulk-stage" onchange="bulkAction('stage',this.value)" style="background:#fff2;border:1px solid #fff3;color:#fff;border-radius:4px;padding:4px 8px;font-size:11px">
         <option value="">Changer stade…</option>
-        <option value="Prospect">Prospect</option>
-        <option value="Contacted">Contacté</option>
-        <option value="Meeting">RDV Prévu</option>
-        <option value="Proposal">Proposition</option>
-        <option value="Negotiation">Négociation</option>
-        <option value="Signed">Signé ✓</option>
+        <option value="Suspect">Suspect</option>
+        <option value="Identifié">Identifié</option>
+        <option value="Contact établi">Contact établi</option>
+        <option value="RDV qualifié">RDV qualifié</option>
+        <option value="Proposition">Proposition</option>
+        <option value="Négociation">Négociation</option>
+        <option value="Signé">Signé ✓</option>
       </select>
       <select id="bulk-seg" onchange="bulkAction('segment',this.value)" style="background:#fff2;border:1px solid #fff3;color:#fff;border-radius:4px;padding:4px 8px;font-size:11px">
         <option value="">Changer segment…</option>
@@ -234,13 +235,14 @@
       <div class="mo-sec">
         <h4>Stade Pipeline</h4>
         <select class="stage-sel" id="mo-stage" onchange="updStage(this.value)">
-          <option value="Prospect">Prospect</option>
-          <option value="Contacted">Contacté</option>
-          <option value="Meeting">RDV Prévu</option>
-          <option value="Proposal">Proposition Envoyée</option>
-          <option value="Negotiation">En Négociation</option>
-          <option value="Signed">Signé ✓</option>
-          <option value="Deployed">Déployé ✓✓</option>
+          <option value="Suspect">Suspect</option>
+          <option value="Identifié">Identifié</option>
+          <option value="Contact établi">Contact établi</option>
+          <option value="RDV qualifié">RDV qualifié</option>
+          <option value="Proposition">Proposition</option>
+          <option value="Négociation">Négociation</option>
+          <option value="Signé">Signé ✓</option>
+          <option value="Déployé">Déployé ✓✓</option>
         </select>
       </div>
       <div class="mo-sec"><h4>Prochaine action planifiée</h4><div id="mo-next" style="background:var(--bg);border-radius:var(--r4);padding:11px;font-size:12.5px"></div></div>
@@ -272,7 +274,7 @@
     <div class="dsub" id="d-sub">Contact — Entreprise</div>
     <div class="dfg"><label>Résultat</label><textarea id="d-res" placeholder="Appel passé, RDV fixé le X / Pas de réponse / Très intéressé…"></textarea></div>
     <div class="dfg"><label>Nouveau stade pipeline</label>
-      <select id="d-stage"><option value="">— Pas de changement —</option><option value="Contacted">Contacté</option><option value="Meeting">RDV Prévu</option><option value="Proposal">Proposition Envoyée</option><option value="Negotiation">En Négociation</option><option value="Signed">Signé ✓</option><option value="Deployed">Déployé ✓✓</option></select>
+      <select id="d-stage"><option value="">— Pas de changement —</option><option value="Suspect">Suspect</option><option value="Identifié">Identifié</option><option value="Contact établi">Contact établi</option><option value="RDV qualifié">RDV qualifié</option><option value="Proposition">Proposition</option><option value="Négociation">Négociation</option><option value="Signé">Signé ✓</option><option value="Déployé">Déployé ✓✓</option></select>
     </div>
     <div class="dfg"><label>Type prochaine action</label>
       <select id="d-next-type"><option value="Appel">📞 Appel</option><option value="Email">✉ Email</option><option value="LinkedIn">🔗 LinkedIn</option><option value="Partenariat">🤝 Partenariat</option><option value="Relance">🔄 Relance</option><option value="RDV">📅 RDV</option><option value="Enrichir">⚙ Enrichir fiche</option></select>
@@ -394,12 +396,13 @@
         <div class="fd-field">
           <label>Stade Pipeline</label>
           <select id="fd-stage">
-            <option value="Prospect" selected>Prospect</option>
-            <option value="Contacted">Contacté</option>
-            <option value="Meeting">RDV Prévu</option>
-            <option value="Proposal">Proposition</option>
-            <option value="Negotiation">Négociation</option>
-            <option value="Signed">Signé ✓</option>
+            <option value="Suspect" selected>Suspect</option>
+            <option value="Identifié">Identifié</option>
+            <option value="Contact établi">Contact établi</option>
+            <option value="RDV qualifié">RDV qualifié</option>
+            <option value="Proposition">Proposition</option>
+            <option value="Négociation">Négociation</option>
+            <option value="Signé">Signé ✓</option>
           </select>
         </div>
         <div class="fd-field">

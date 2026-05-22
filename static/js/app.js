@@ -1,6 +1,6 @@
 // ════════════════════════════════════════════════════════════════ CONSTANTS
-const STAGES = ['Prospect','Contacted','Meeting','Proposal','Negotiation','Signed','Deployed'];
-const SL = {Prospect:'Prospect',Contacted:'Contacté',Meeting:'RDV Prévu',Proposal:'Proposition',Negotiation:'Négociation',Signed:'Signé ✓',Deployed:'Déployé ✓✓'};
+const STAGES = ['Suspect','Identifié','Contact établi','RDV qualifié','Proposition','Négociation','Signé','Déployé'];
+const SL = {Suspect:'Suspect',Identifié:'Identifié','Contact établi':'Contact établi','RDV qualifié':'RDV qualifié',Proposition:'Proposition',Négociation:'Négociation',Signé:'Signé ✓',Déployé:'Déployé ✓✓'};
 const SECTOR_COLORS = {
   '🧹 Propreté/FM':'#E8500A','🏗️ BTP':'#1A73E8','🍽️ Restauration':'#0F9D58',
   '📦 Logistique':'#7B2FBE','👴 Services Personne':'#F5A623','💼 Intérim/RH':'#0077B5',
@@ -99,7 +99,7 @@ function updSidebar() {
   const qwCount  = active.filter(c=>c.segment==='Quick Win').length;
   document.getElementById('ss-str').textContent = strCount;
   document.getElementById('ss-qw').textContent  = qwCount;
-  document.getElementById('ss-si').textContent  = active.filter(c=>c.stage==='Signed'||c.stage==='Deployed').length;
+  document.getElementById('ss-si').textContent  = active.filter(c=>c.stage==='Signé'||c.stage==='Déployé').length;
   const bdgStr = document.getElementById('bdg-strategic');
   if(bdgStr) bdgStr.textContent = strCount || '0';
   const bdgQw = document.getElementById('bdg-qw');
@@ -359,7 +359,7 @@ function rQuickWins(list) {
       <td><div style="display:flex;align-items:center;gap:9px"><div class="co-av" style="background:${col}">${init}</div><div><div style="font-weight:800;font-size:12.5px;display:flex;align-items:center;gap:5px">${esc(c.company)} ${qualityDot(c)}</div><div style="font-size:10.5px;color:var(--mu)">${esc(c.sector||'')}</div></div></div></td>
       <td>${c.decision_maker?'<span class="dm-dot"></span>':''}${esc(c.name)}<div style="font-size:10.5px;color:var(--mu)">${esc((c.title||'').substring(0,35))}</div></td>
       <td>${scoreTag(cScore(c))}</td>
-      <td style="font-size:11.5px;color:var(--mu)">${SL[c.stage]||c.stage||'Prospect'}</td>
+      <td style="font-size:11.5px;color:var(--mu)">${SL[c.stage]||c.stage||'Suspect'}</td>
       <td>${atTag(c.action_type)}<div style="font-size:10.5px;color:var(--mu);margin-top:2px">${esc((c.next_action||'').substring(0,42))}</div>
           <div style="font-size:10px;color:var(--mu)">${c.next_action_date||''}</div></td>
       <td>${urgTag}</td>
@@ -518,7 +518,7 @@ function rDashboard() {
   const list = applyF(G.contacts);
   const ov = list.filter(c=>isOv(c,td)).sort((a,b)=>segO(a)-segO(b)||b.score-a.score);
   const tl = list.filter(c=>isTd(c,td)).sort((a,b)=>segO(a)-segO(b)||b.score-a.score);
-  const signed = G.contacts.filter(c=>c.stage==='Signed'||c.stage==='Deployed').length;
+  const signed = G.contacts.filter(c=>c.stage==='Signé'||c.stage==='Déployé').length;
   const ve = G.contacts.filter(c=>c.email_status==='valid'||c.email_status==='Verified').length;
   const avgScore = G.contacts.length ? Math.round(G.contacts.reduce((s,c)=>s+c.score,0)/G.contacts.length) : 0;
 
@@ -546,8 +546,8 @@ function rDashboard() {
   if(!ov.length&&!tl.length) h += '<div class="empty"><div class="ei">🎉</div><h3>Aucune action en retard</h3><p>Toutes les actions du jour sont à jour !</p></div>';
   h += '</div><div class="dash-side">';
   h += '<div class="dash-side-card"><h3>Pipeline</h3>';
-  const sc={}; STAGES.forEach(s=>{sc[s]=0;}); G.contacts.forEach(c=>{const s=c.stage||'Prospect';if(sc[s]!==undefined)sc[s]++;});
-  STAGES.forEach(s=>{ const n=sc[s]; if(!n)return; h+=`<div class="bar-row" style="margin-bottom:6px"><div class="bar-lbl" style="min-width:110px;font-size:12px">${SL[s]}</div><div class="bar-track"><div class="bar-fill" style="width:${Math.round(n/G.contacts.length*100)}%;background:${s==='Signed'||s==='Deployed'?'var(--g)':'var(--ac)'}"></div></div><div class="bar-num">${n}</div></div>`; });
+  const sc={}; STAGES.forEach(s=>{sc[s]=0;}); G.contacts.forEach(c=>{const s=c.stage||'Suspect';if(sc[s]!==undefined)sc[s]++;});
+  STAGES.forEach(s=>{ const n=sc[s]; if(!n)return; h+=`<div class="bar-row" style="margin-bottom:6px"><div class="bar-lbl" style="min-width:110px;font-size:12px">${SL[s]}</div><div class="bar-track"><div class="bar-fill" style="width:${Math.round(n/G.contacts.length*100)}%;background:${s==='Signé'||s==='Déployé'?'var(--g)':'var(--ac)'}"></div></div><div class="bar-num">${n}</div></div>`; });
   h += '</div>';
   h += '<div class="dash-side-card"><h3>Par Secteur</h3>';
   const secCounts = {};
@@ -875,7 +875,7 @@ function rContactsTable(list) {
       <td>${c.decision_maker?'<span class="dm-dot"></span>':''}${hl(c.name,G.q)}<div style="font-size:10.5px;color:var(--mu)">${esc((c.title||'').substring(0,35))}${(c.title||'').length>35?'…':''}</div></td>
       <td>${scoreTag(cScore(c))}</td>
       <td>${segTag(c.segment)}</td>
-      <td style="font-size:11.5px;color:var(--mu)">${SL[c.stage]||c.stage||'Prospect'}</td>
+      <td style="font-size:11.5px;color:var(--mu)">${SL[c.stage]||c.stage||'Suspect'}</td>
       <td>${atTag(c.action_type)}<div style="font-size:10.5px;color:var(--mu);margin-top:2px">${esc((c.next_action||'').substring(0,42))}${(c.next_action||'').length>42?'…':''}</div></td>
       <td onclick="event.stopPropagation()" style="white-space:nowrap">${quickBtns(c)}</td>
     </tr>`;
@@ -889,11 +889,11 @@ function goPage(p) { G.page=p; render(); document.getElementById('content').scro
 function rPipeline() {
   const list = applyF(G.contacts);
   const cols={};STAGES.forEach(s=>{cols[s]=[];});
-  list.forEach(c=>{const s=c.stage||'Prospect';if(cols[s])cols[s].push(c);else cols['Prospect'].push(c);});
+  list.forEach(c=>{const s=c.stage||'Suspect';if(cols[s])cols[s].push(c);else cols['Suspect'].push(c);});
   let h='<div class="pipeline-wrap">';
   STAGES.forEach(st=>{
     const cards=(cols[st]||[]).sort((a,b)=>b.score-a.score);
-    const isGood=st==='Signed'||st==='Deployed';
+    const isGood=st==='Signé'||st==='Déployé';
     h+=`<div class="pipe-col">
       <div class="pipe-col-head"><span style="color:${isGood?'var(--g)':'var(--mu)'}">${SL[st]}</span><span class="pipe-col-cnt" style="${isGood?'background:var(--gl);color:var(--g)':''}">${cards.length}</span></div>`;
     cards.forEach(c=>{
@@ -1027,7 +1027,7 @@ function rMetrics() {
   const td=today();const ov=G.contacts.filter(c=>isOv(c,td)).length;const tdn=G.contacts.filter(c=>isTd(c,td)).length;
   const hp=G.contacts.filter(c=>c.priority==='HIGH').length;
   const ve=G.contacts.filter(c=>c.email_status==='valid'||c.email_status==='Verified').length;
-  const si=G.contacts.filter(c=>c.stage==='Signed'||c.stage==='Deployed').length;
+  const si=G.contacts.filter(c=>c.stage==='Signé'||c.stage==='Déployé').length;
   let h=`<div class="met-grid">
     <div class="met-card"><div class="ml">Total Contacts</div><div class="mv">${tot}</div><div class="ms">${cos} entreprises</div></div>
     <div class="met-card"><div class="ml">Actions retard</div><div class="mv" style="color:var(--r)">${ov}</div><div class="ms">${tdn} aujourd'hui</div></div>
@@ -1042,10 +1042,10 @@ function rMetrics() {
   h+=`<div class="bar-card"><h3>Par segment</h3>`;
   Object.entries(segC).sort((a,b)=>b[1]-a[1]).forEach(([seg,cnt])=>{h+=`<div class="bar-row"><div class="bar-lbl">${seg}</div><div class="bar-track"><div class="bar-fill" style="width:${(cnt/mxS*100).toFixed(0)}%;background:var(--ac)"></div></div><div class="bar-num">${cnt}</div></div>`;});
   h+='</div>';
-  const stgC={};STAGES.forEach(s=>{stgC[s]=0;});G.contacts.forEach(c=>{const s=c.stage||'Prospect';if(stgC[s]!==undefined)stgC[s]++;});
+  const stgC={};STAGES.forEach(s=>{stgC[s]=0;});G.contacts.forEach(c=>{const s=c.stage||'Suspect';if(stgC[s]!==undefined)stgC[s]++;});
   const mxSt=Math.max(...Object.values(stgC),1);
   h+=`<div class="bar-card"><h3>Pipeline par stade</h3>`;
-  STAGES.forEach(s=>{const n=stgC[s];const isG=s==='Signed'||s==='Deployed';h+=`<div class="bar-row"><div class="bar-lbl">${SL[s]}</div><div class="bar-track"><div class="bar-fill" style="width:${(n/mxSt*100).toFixed(0)}%;background:${isG?'var(--g)':'var(--ac)'}"></div></div><div class="bar-num">${n}</div></div>`;});
+  STAGES.forEach(s=>{const n=stgC[s];const isG=s==='Signé'||s==='Déployé';h+=`<div class="bar-row"><div class="bar-lbl">${SL[s]}</div><div class="bar-track"><div class="bar-fill" style="width:${(n/mxSt*100).toFixed(0)}%;background:${isG?'var(--g)':'var(--ac)'}"></div></div><div class="bar-num">${n}</div></div>`;});
   h+='</div></div>';
   h+=`<div class="bar-card" style="margin-top:12px"><h3>Objectifs KPIs — Plan 90 Jours</h3><div style="overflow:auto"><table class="kpi-table"><thead><tr><th style="text-align:left">Métrique</th><th>S4</th><th>S8</th><th>S12</th></tr></thead><tbody>`;
   ALL_KPIS.targets.forEach(k=>{h+=`<tr><td>${esc(k.label)}</td><td>${k.s4}</td><td>${k.s8}</td><td>${k.s12}</td></tr>`;});
@@ -1072,7 +1072,7 @@ function openC(id) {
     <div class="info-item"><div class="ik">LinkedIn</div><div class="iv">${c.linkedin?`<a href="${esc(c.linkedin)}" target="_blank">Voir le profil →</a>`:'—'}</div></div>
   `;
   document.getElementById('mo-poei').innerHTML=`<div class="pt">${esc(c.poei_offer||'Non défini')}</div><div class="ps">${esc(c.active_offers||'')} &nbsp;·&nbsp; ${esc(c.deal_potential||'')}</div>`;
-  document.getElementById('mo-stage').value=c.stage||'Prospect';
+  document.getElementById('mo-stage').value=c.stage||'Suspect';
   document.getElementById('mo-next').innerHTML=`${atTag(c.action_type)} <strong>${esc(c.next_action||'')}</strong><div style="margin-top:5px;font-size:11px;color:var(--mu)">Date prévue : ${c.next_action_date||'—'}</div>`;
   rLog();
   document.getElementById('mo-note').value='';
@@ -1203,8 +1203,8 @@ function parseDeal(s) {
   return m ? parseInt(m[1].replace(/\s/g,'')) : 0;
 }
 function pipelineValue(contacts) {
-  const PROB = {Prospect:.05,Contacted:.15,Meeting:.35,Proposal:.60,Negotiation:.80,Signed:1,Deployed:1};
-  return contacts.reduce((sum,c)=>sum+parseDeal(c.deal_potential||'')*3000*(PROB[c.stage||'Prospect']||.05),0);
+  const PROB = {Suspect:.05,Identifié:.10,'Contact établi':.20,'RDV qualifié':.35,Proposition:.50,Négociation:.75,Signé:1,Déployé:1};
+  return contacts.reduce((sum,c)=>sum+parseDeal(c.deal_potential||'')*3000*(PROB[c.stage||'Suspect']||.05),0);
 }
 function fmtEur(n) {
   if(n>=1000000) return (n/1000000).toFixed(1)+'M€';
@@ -1269,9 +1269,9 @@ function rMissionControl(d) {
 
   // Stage funnel counts
   const sc = d.stage_counts || {};
-  const stageOrder = ['Prospect','Contacted','Meeting','Proposal','Negotiation','Signed'];
-  const stageColors = {'Prospect':'#78909C','Contacted':'#1A73E8','Meeting':'#7B2FBE','Proposal':'#F5A623','Negotiation':'#E8500A','Signed':'#0F9D58'};
-  const stageLabels = {'Prospect':'Prospect','Contacted':'Contacté','Meeting':'RDV','Proposal':'Proposition','Negotiation':'Négo','Signed':'Signé ✓'};
+  const stageOrder = ['Suspect','Identifié','Contact établi','RDV qualifié','Proposition','Négociation','Signé'];
+  const stageColors = {'Suspect':'#78909C','Identifié':'#546E7A','Contact établi':'#1A73E8','RDV qualifié':'#7B2FBE','Proposition':'#F5A623','Négociation':'#E8500A','Signé':'#0F9D58'};
+  const stageLabels = {'Suspect':'Suspect','Identifié':'Identifié','Contact établi':'Contact établi','RDV qualifié':'RDV qualifié','Proposition':'Proposition','Négociation':'Négo','Signé':'Signé ✓'};
 
   let h = `<div class="mc-wrap">`;
 
@@ -1302,9 +1302,9 @@ function rMissionControl(d) {
     <div class="mc-panel-title">🏗 Pipeline</div>`;
   stageOrder.forEach(s => {
     const n = sc[s] || 0;
-    const max = sc['Prospect'] || 1;
+    const max = sc['Suspect'] || 1;
     const pct = Math.round(n/max*100);
-    if(n===0 && s==='Prospect') return;
+    if(n===0 && s==='Suspect') return;
     h += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;cursor:pointer" onclick="setView('all-contacts')">
       <div style="width:60px;font-size:10px;color:var(--mu2);text-align:right;flex-shrink:0">${stageLabels[s]}</div>
       <div style="flex:1;background:var(--bg);border-radius:3px;height:20px;position:relative">
@@ -1314,10 +1314,10 @@ function rMissionControl(d) {
       </div>
     </div>`;
   });
-  // Prospect toujours en bas
-  const np = sc['Prospect']||0;
+  // Suspect toujours en bas
+  const np = sc['Suspect']||0;
   h += `<div style="display:flex;align-items:center;gap:8px;margin-top:8px;padding-top:8px;border-top:1px solid var(--bd);cursor:pointer" onclick="setView('all-contacts')">
-    <div style="width:60px;font-size:10px;color:var(--mu);text-align:right;flex-shrink:0">Prospect</div>
+    <div style="width:60px;font-size:10px;color:var(--mu);text-align:right;flex-shrink:0">Suspect</div>
     <div style="flex:1;background:var(--bg);border-radius:3px;height:20px;position:relative">
       <div style="width:100%;background:#78909C33;border-radius:3px;height:100%;display:flex;align-items:center;padding-left:6px">
         <span style="font-size:10px;color:#78909C">${np} à contacter</span>
@@ -1428,10 +1428,10 @@ async function saveMissionTargets() {
 
 // ════════════════════════════════════════════════════════════════ KANBAN PIPELINE
 
-const KB_STAGES = ['Prospect','Contacted','Meeting','Proposal','Negotiation','Signed'];
-const KB_LABELS = {Prospect:'Prospect',Contacted:'Contacté',Meeting:'RDV Prévu',Proposal:'Proposition',Negotiation:'Négociation',Signed:'Signé ✓'};
-const KB_COLORS = {Prospect:'#78909C',Contacted:'#1A73E8',Meeting:'#7B2FBE',Proposal:'#F5A623',Negotiation:'#E8500A',Signed:'#0F9D58'};
-const PROB = {Prospect:.05,Contacted:.15,Meeting:.35,Proposal:.60,Negotiation:.80,Signed:1.0,Deployed:1.0};
+const KB_STAGES = ['Suspect','Identifié','Contact établi','RDV qualifié','Proposition','Négociation','Signé'];
+const KB_LABELS = {Suspect:'Suspect',Identifié:'Identifié','Contact établi':'Contact établi','RDV qualifié':'RDV qualifié',Proposition:'Proposition',Négociation:'Négociation',Signé:'Signé ✓'};
+const KB_COLORS = {Suspect:'#78909C',Identifié:'#546E7A','Contact établi':'#1A73E8','RDV qualifié':'#7B2FBE',Proposition:'#F5A623',Négociation:'#E8500A',Signé:'#0F9D58'};
+const PROB = {Suspect:.05,Identifié:.10,'Contact établi':.20,'RDV qualifié':.35,Proposition:.50,Négociation:.75,Signé:1.0,Déployé:1.0};
 let _kbDragId = null;
 
 async function loadKanban() {
@@ -1452,9 +1452,9 @@ function rKanban() {
   const byStage = {};
   KB_STAGES.forEach(s => byStage[s] = []);
   G.contacts.forEach(c => {
-    const s = c.stage || 'Prospect';
+    const s = c.stage || 'Suspect';
     if (byStage[s]) byStage[s].push(c);
-    else byStage['Prospect'].push(c);
+    else byStage['Suspect'].push(c);
   });
 
   // Weighted pipeline value per stage
@@ -1658,12 +1658,12 @@ function rSequencesView() {
 
   // Stats barre
   const total = G.contacts.length;
-  const contacted = G.contacts.filter(c=>c.stage!=='Prospect').length;
+  const contacted = G.contacts.filter(c=>c.stage!=='Suspect').length;
   const prospect = total - contacted;
   h += `<div style="display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap">
     <div class="g-kpi" style="border-left:4px solid #E8500A;flex:1;min-width:160px">
       <div class="kpi-val" style="color:#E8500A">${prospect}</div>
-      <div class="kpi-lbl">Prospects à activer</div>
+      <div class="kpi-lbl">Suspects à activer</div>
     </div>
     <div class="g-kpi" style="border-left:4px solid #1A73E8;flex:1;min-width:160px">
       <div class="kpi-val" style="color:#1A73E8">${contacted}</div>
@@ -1745,14 +1745,14 @@ async function openApplySequence(seqKey, autoSegment) {
   const seq = SEQUENCES[seqKey];
   if(!seq) return;
   const targets = autoSegment
-    ? G.contacts.filter(c => c.segment === autoSegment && c.stage === 'Prospect')
-    : G.contacts.filter(c => c.stage === 'Prospect').slice(0, 20);
+    ? G.contacts.filter(c => c.segment === autoSegment && c.stage === 'Suspect')
+    : G.contacts.filter(c => c.stage === 'Suspect').slice(0, 20);
 
-  if(targets.length === 0) { toast('Aucun contact Prospect dans ce groupe', 'error'); return; }
+  if(targets.length === 0) { toast('Aucun contact Suspect dans ce groupe', 'error'); return; }
 
   const msg = autoSegment
-    ? `Appliquer "${seq.name}" à ${targets.length} contacts ${autoSegment} (Prospect) ?`
-    : `Appliquer "${seq.name}" aux ${targets.length} premiers prospects ?`;
+    ? `Appliquer "${seq.name}" à ${targets.length} contacts ${autoSegment} (Suspect) ?`
+    : `Appliquer "${seq.name}" aux ${targets.length} premiers suspects ?`;
 
   if(!confirm(`${msg}\n\nCela va planifier J+0→J+${seq.steps[seq.steps.length-1].day} pour chaque contact.`)) return;
 
@@ -1798,7 +1798,7 @@ function rGrowthDashboard() {
   const list = G.contacts;
   const ov = list.filter(c=>isOv(c,td));
   const tl = list.filter(c=>isTd(c,td));
-  const signed = list.filter(c=>c.stage==='Signed'||c.stage==='Deployed');
+  const signed = list.filter(c=>c.stage==='Signé'||c.stage==='Déployé');
   const pipeline = pipelineValue(list);
   const strategic = list.filter(c=>c.segment==='Strategic');
   const ve = list.filter(c=>c.email_status==='valid'||c.email_status==='Verified');
@@ -1806,14 +1806,14 @@ function rGrowthDashboard() {
   // Stage distribution
   const stageCounts = {};
   STAGES.forEach(s=>stageCounts[s]=0);
-  list.forEach(c=>{const s=c.stage||'Prospect';if(stageCounts[s]!==undefined)stageCounts[s]++;});
+  list.forEach(c=>{const s=c.stage||'Suspect';if(stageCounts[s]!==undefined)stageCounts[s]++;});
   const maxStage = Math.max(...Object.values(stageCounts),1);
 
   // Sector pipeline
   const secPipe = {};
   list.forEach(c=>{
     const s=c.sector||'Autre';
-    const val = parseDeal(c.deal_potential||'')*3000*({Prospect:.05,Contacted:.15,Meeting:.35,Proposal:.60,Negotiation:.80,Signed:1,Deployed:1}[c.stage||'Prospect']||.05);
+    const val = parseDeal(c.deal_potential||'')*3000*({Suspect:.05,Identifié:.10,'Contact établi':.20,'RDV qualifié':.35,Proposition:.50,Négociation:.75,Signé:1,Déployé:1}[c.stage||'Suspect']||.05);
     secPipe[s]=(secPipe[s]||0)+val;
   });
   const topSectors = Object.entries(secPipe).sort((a,b)=>b[1]-a[1]).slice(0,6);
@@ -1885,7 +1885,7 @@ function rGrowthDashboard() {
 
   // Sales Funnel
   h += '<div class="g-card" style="margin-bottom:14px"><h3>Entonnoir Commercial POEI</h3><div class="funnel-wrap">';
-  const stageColors = {Prospect:'#aaa',Contacted:'#F5A623',Meeting:'#1A73E8',Proposal:'#7B2FBE',Negotiation:'#E8500A',Signed:'#0F9D58',Deployed:'#0F9D58'};
+  const stageColors = {Suspect:'#aaa',Identifié:'#546E7A','Contact établi':'#F5A623','RDV qualifié':'#1A73E8',Proposition:'#7B2FBE',Négociation:'#E8500A',Signé:'#0F9D58',Déployé:'#0F9D58'};
   STAGES.forEach(s=>{
     const n=stageCounts[s];
     const pct=Math.max(Math.round(n/list.length*100),1);
@@ -2040,7 +2040,7 @@ function rMarketStudy() {
       </div>
       <div style="background:#E6F4EA;border-radius:8px;padding:14px;border-left:3px solid #0F9D58">
         <div style="font-weight:900;font-size:12.5px;color:#0F9D58;margin-bottom:6px">✅ Consolider</div>
-        <div style="font-size:12px;color:#5E5C58;line-height:1.5">Propreté/FM : 164 contacts, secteur core. Pousser vers stade Contacted → Meeting. Objectif : 10 RDV cette semaine sur TOP 20 Strategic.</div>
+        <div style="font-size:12px;color:#5E5C58;line-height:1.5">Propreté/FM : 164 contacts, secteur core. Pousser vers stade Contact établi → RDV qualifié. Objectif : 10 RDV cette semaine sur TOP 20 Strategic.</div>
       </div>
       <div style="background:#E8F0FE;border-radius:8px;padding:14px;border-left:3px solid #1A73E8">
         <div style="font-weight:900;font-size:12.5px;color:#1A73E8;margin-bottom:6px">📈 Développer</div>
@@ -2067,7 +2067,7 @@ function rMarketStudy() {
     const sContacts=G.contacts.filter(c=>c.sector===sec);
     const col=m.color||secColor(sec);
     const strategic=sContacts.filter(c=>c.segment==='Strategic').length;
-    const signed=sContacts.filter(c=>c.stage==='Signed'||c.stage==='Deployed').length;
+    const signed=sContacts.filter(c=>c.stage==='Signé'||c.stage==='Déployé').length;
     const pipe=pipelineValue(sContacts);
     if(!sContacts.length && !m.tam) return;
     h+=`<div class="msc">
@@ -2108,10 +2108,10 @@ function rPartners() {
   const byStage = {};
   PARTNER_STAGES.forEach(s=>{byStage[s]=[];});
   partners.forEach(c=>{
-    const s = c.stage==='Signed'||c.stage==='Deployed'?'Partenaire actif':
-              c.stage==='Proposal'||c.stage==='Negotiation'?'Convention signée':
-              c.stage==='Meeting'?'Réunion faite':
-              c.stage==='Contacted'?'Contact établi':'À approcher';
+    const s = c.stage==='Signé'||c.stage==='Déployé'?'Partenaire actif':
+              c.stage==='Proposition'||c.stage==='Négociation'?'Convention signée':
+              c.stage==='RDV qualifié'?'Réunion faite':
+              c.stage==='Contact établi'?'Contact établi':'À approcher';
     byStage[s].push(c);
   });
 
@@ -2336,7 +2336,7 @@ function openContactForm(id=null) {
     document.getElementById('fd-phone').value = c.phone||'';
     document.getElementById('fd-linkedin').value = c.linkedin||'';
     document.getElementById('fd-dm').checked = !!c.decision_maker;
-    document.getElementById('fd-stage').value = c.stage||'Prospect';
+    document.getElementById('fd-stage').value = c.stage||'Suspect';
     document.getElementById('fd-priority').value = c.priority||'MEDIUM';
     const sc = document.getElementById('fd-score');
     sc.value = c.score||50;
@@ -2357,7 +2357,7 @@ function openContactForm(id=null) {
      'fd-poei','fd-offers','fd-deal','fd-action-txt','fd-notes'].forEach(id=>document.getElementById(id).value='');
     document.getElementById('fd-sector').value = '🧹 Propreté/FM';
     document.getElementById('fd-segment').value = 'Long Term';
-    document.getElementById('fd-stage').value = 'Prospect';
+    document.getElementById('fd-stage').value = 'Suspect';
     document.getElementById('fd-priority').value = 'MEDIUM';
     document.getElementById('fd-email-status').value = 'unknown';
     document.getElementById('fd-action-type').value = 'Email';
@@ -2533,7 +2533,7 @@ function rContactsTable(list) {
 
     if(multi) {
       // ── COMPANY GROUP ROW (header) ──────────────────────────────
-      const stages = [...new Set(contacts.map(c=>SL[c.stage]||c.stage||'Prospect'))].join(', ');
+      const stages = [...new Set(contacts.map(c=>SL[c.stage]||c.stage||'Suspect'))].join(', ');
       const bestScore = Math.max(...contacts.map(c=>c.score||0));
       const dmContacts = contacts.filter(c=>c.decision_maker);
       const init = (company||'?').trim().charAt(0).toUpperCase();
@@ -2588,7 +2588,7 @@ function rContactsTable(list) {
           </td>
           <td style="padding:8px 10px">${scoreTag(c.score)}</td>
           <td style="padding:8px 10px">${segTag(c.segment)}</td>
-          <td style="padding:8px 10px;font-size:11px;color:var(--mu)">${SL[c.stage]||c.stage||'Prospect'}</td>
+          <td style="padding:8px 10px;font-size:11px;color:var(--mu)">${SL[c.stage]||c.stage||'Suspect'}</td>
           <td style="padding:8px 10px">${atTag(c.action_type)}<div style="font-size:10px;color:var(--mu);margin-top:1px">${esc((c.next_action||'').substring(0,40))}</div></td>
           <td style="padding:8px 10px;white-space:nowrap" onclick="event.stopPropagation()">
             ${quickBtns(c)}
@@ -2612,7 +2612,7 @@ function rContactsTable(list) {
         <td>${c.decision_maker?'<span class="dm-dot"></span>':''}${esc(c.name)}<div style="font-size:10.5px;color:var(--mu)">${esc((c.title||'').substring(0,35))}${(c.title||'').length>35?'…':''}</div></td>
         <td>${scoreTag(c.score)}</td>
         <td>${segTag(c.segment)}</td>
-        <td style="font-size:11.5px;color:var(--mu)">${SL[c.stage]||c.stage||'Prospect'}</td>
+        <td style="font-size:11.5px;color:var(--mu)">${SL[c.stage]||c.stage||'Suspect'}</td>
         <td>${atTag(c.action_type)}<div style="font-size:10.5px;color:var(--mu);margin-top:2px">${esc((c.next_action||'').substring(0,42))}${(c.next_action||'').length>42?'…':''}</div></td>
         <td onclick="event.stopPropagation()" style="white-space:nowrap">
           ${quickBtns(c)}
@@ -2895,7 +2895,7 @@ function applyEmailTemplate(id) {
 // Ouvrir modal depuis la vue suivi (choisir contact)
 function openEmailModalFromList() {
   // On prend le premier Strategic non contacté
-  const c = G.contacts.find(x => x.segment==='Strategic' && x.stage==='Prospect');
+  const c = G.contacts.find(x => x.segment==='Strategic' && x.stage==='Suspect');
   if(c) openEmailModal(c.id);
   else if(G.contacts.length > 0) openEmailModal(G.contacts[0].id);
 }
@@ -3133,8 +3133,8 @@ function initGrowthCharts(data) {
   destroyCharts(['ch-pipeline','ch-activity','ch-sector','ch-trend']);
 
   const STAGE_COLORS = {
-    Prospect:'#9B9A97',Contacted:'#1A73E8',Meeting:'#7B2FBE',
-    Proposal:'#F5A623',Negotiation:'#E8500A',Signed:'#0F9D58',Deployed:'#0F9D58'
+    Suspect:'#78909C',Identifié:'#546E7A','Contact établi':'#1A73E8',
+    'RDV qualifié':'#7B2FBE',Proposition:'#F5A623',Négociation:'#E8500A',Signé:'#0F9D58',Déployé:'#0F9D58'
   };
 
   // Pipeline by stage (bar)
@@ -3144,7 +3144,7 @@ function initGrowthCharts(data) {
   if(ctx1) {
     _growthCharts['ch-pipeline'] = new Chart(ctx1, {
       type:'bar',
-      data:{labels:pStages.map(s=>s==='Signed'?'Signé':s==='Meeting'?'RDV':s==='Proposal'?'Proposition':s==='Negotiation'?'Négo':s),
+      data:{labels:pStages,
             datasets:[{data:pVals,backgroundColor:pStages.map(s=>STAGE_COLORS[s]||'#ccc'),borderRadius:6}]},
       options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
         scales:{y:{ticks:{callback:v=>v+'k€'},grid:{color:'#f0f0ef'}},x:{grid:{display:false}}}}
@@ -3213,8 +3213,8 @@ async function loadGrowthDashboard() {
 
   // Stage counts
   const stageMap = {};
-  contacts.forEach(c => { stageMap[c.stage||'Prospect'] = (stageMap[c.stage||'Prospect']||0)+1; });
-  const STAGES_ORDER = ['Prospect','Contacted','Meeting','Proposal','Negotiation','Signed','Deployed'];
+  contacts.forEach(c => { stageMap[c.stage||'Suspect'] = (stageMap[c.stage||'Suspect']||0)+1; });
+  const STAGES_ORDER = ['Suspect','Identifié','Contact établi','RDV qualifié','Proposition','Négociation','Signé','Déployé'];
   const stageFunnelMax = Math.max(...STAGES_ORDER.map(s=>stageMap[s]||0), 1);
 
   el.innerHTML = `
@@ -3226,7 +3226,7 @@ async function loadGrowthDashboard() {
     </div>
     <div class="growth-kpi"><div class="gk-l">Strategic</div><div class="gk-v">${contacts.filter(c=>c.segment==='Strategic').length}</div><div class="gk-sub">comptes prioritaires</div></div>
     <div class="growth-kpi"><div class="gk-l">Score moyen</div><div class="gk-v">${contacts.length?Math.round(contacts.reduce((s,c)=>s+(c.score||0),0)/contacts.length):0}</div><div class="gk-sub">sur 100 pts</div></div>
-    <div class="growth-kpi"><div class="gk-l">Signés / Déployés</div><div class="gk-v" style="color:var(--g)">${contacts.filter(c=>c.stage==='Signed'||c.stage==='Deployed').length}</div><div class="gk-sub">conventions actives</div></div>
+    <div class="growth-kpi"><div class="gk-l">Signés / Déployés</div><div class="gk-v" style="color:var(--g)">${contacts.filter(c=>c.stage==='Signé'||c.stage==='Déployé').length}</div><div class="gk-sub">conventions actives</div></div>
     <div class="growth-kpi"><div class="gk-l">Emails valides</div><div class="gk-v">${contacts.filter(c=>c.email_status==='valid'||c.email_status==='Verified').length}</div><div class="gk-sub">contacts joignables</div></div>
   </div>
 
@@ -3241,9 +3241,9 @@ async function loadGrowthDashboard() {
     <h3 style="font-size:11px;font-weight:800;color:var(--mu);text-transform:uppercase;letter-spacing:.6px;margin-bottom:12px">Entonnoir pipeline</h3>
     ${STAGES_ORDER.map(s => {
       const n = stageMap[s]||0;
-      if(!n&&s!=='Prospect') return '';
+      if(!n&&s!=='Suspect') return '';
       const w = Math.round(n/stageFunnelMax*100);
-      const isWin = s==='Signed'||s==='Deployed';
+      const isWin = s==='Signé'||s==='Déployé';
       return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:7px">
         <div style="width:100px;font-size:11.5px;color:var(--mu);text-align:right;flex-shrink:0">${SL[s]||s}</div>
         <div style="flex:1;background:var(--bg);border-radius:4px;height:24px;overflow:hidden">

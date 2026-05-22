@@ -91,7 +91,7 @@ class Contact(db.Model):
     title = db.Column(db.String(200))
     sector = db.Column(db.String(100))
     segment = db.Column(db.String(50))
-    stage = db.Column(db.String(50), default='Prospect')
+    stage = db.Column(db.String(50), default='Suspect')
     priority = db.Column(db.String(20), default='MEDIUM')
     score = db.Column(db.Integer, default=50)
     email = db.Column(db.String(200))
@@ -131,7 +131,7 @@ class Contact(db.Model):
             'title': self.title or '',
             'sector': self.sector or '',
             'segment': self.segment or '',
-            'stage': self.stage or 'Prospect',
+            'stage': self.stage or 'Suspect',
             'priority': self.priority or 'MEDIUM',
             'score': self.score or 50,
             'email': self.email or '',
@@ -400,7 +400,7 @@ def _auto_segment(c):
         return 'Dormant'
     if is_priority and has_dm and has_contact and score >= 55:
         return 'Strategic'
-    if has_contact and has_dm and has_action and (c.stage or 'Prospect') != 'Prospect':
+    if has_contact and has_dm and has_action and (c.stage or 'Suspect') != 'Suspect':
         return 'Quick Win'
     if is_interim:
         return 'Partner'
@@ -488,7 +488,7 @@ def api_create_contact():
     c = Contact(
         company=data.get('company',''), name=data.get('name',''),
         title=data.get('title',''), sector=_canonicalize_sector(data.get('sector','')),
-        segment=data.get('segment','Long Term'), stage=data.get('stage','Prospect'),
+        segment=data.get('segment','Long Term'), stage=data.get('stage','Suspect'),
         priority=data.get('priority','MEDIUM'), score=int(data.get('score',50)),
         email=data.get('email',''), email_status=data.get('email_status','unknown'),
         phone=data.get('phone',''), decision_maker=bool(data.get('decision_maker',False)),
@@ -600,17 +600,17 @@ def api_add_log(cid):
     c.last_activity_at = datetime.utcnow()
     log_type = data.get('type', '')
     # Auto-advance stage
-    if c.stage == 'Prospect' and log_type in ('Email', 'Appel', 'LinkedIn'):
-        c.stage = 'Contacted'
+    if c.stage == 'Suspect' and log_type in ('Email', 'Appel', 'LinkedIn'):
+        c.stage = 'Contact établi'
         c.stage_changed_at = datetime.utcnow()
-    if log_type == 'RDV' and c.stage in ('Prospect', 'Contacted'):
-        c.stage = 'Meeting'
+    if log_type == 'RDV' and c.stage in ('Suspect', 'Contact établi'):
+        c.stage = 'RDV qualifié'
         c.stage_changed_at = datetime.utcnow()
     result_l = (data.get('result', '') or '').lower()
     _neg = ('pas signé', 'pas signe', 'non signé', 'non signe', 'refus', 'refuse', 'annulé', 'annule', 'pas d\'accord', 'pas accord')
     _pos = ('signé', 'signe', 'convention', 'accord')
-    if any(w in result_l for w in _pos) and not any(n in result_l for n in _neg) and c.stage not in ('Signed', 'Deployed'):
-        c.stage = 'Signed'
+    if any(w in result_l for w in _pos) and not any(n in result_l for n in _neg) and c.stage not in ('Signé', 'Déployé'):
+        c.stage = 'Signé'
         c.stage_changed_at = datetime.utcnow()
     # Activity score boost
     score_boost = {'Email': 5, 'Appel': 8, 'RDV': 20, 'LinkedIn': 4, 'Relance': 3}.get(log_type, 3)
@@ -699,16 +699,16 @@ def api_mark_done(cid):
     c.last_activity_at = datetime.utcnow()
     c.done = False
     # Auto-advance stage
-    if c.stage == 'Prospect':
-        c.stage = 'Contacted'
+    if c.stage == 'Suspect':
+        c.stage = 'Contact établi'
         c.stage_changed_at = datetime.utcnow()
-    if c.action_type == 'RDV' and c.stage in ('Prospect', 'Contacted') and not data.get('stage'):
-        c.stage = 'Meeting'
+    if c.action_type == 'RDV' and c.stage in ('Suspect', 'Contact établi') and not data.get('stage'):
+        c.stage = 'RDV qualifié'
         c.stage_changed_at = datetime.utcnow()
     result_str = (data.get('result', '') or '').lower()
     _neg2 = ('pas signé', 'pas signe', 'non signé', 'non signe', 'refus', 'refuse', 'annulé', 'annule', 'pas d\'accord', 'pas accord')
-    if any(w in result_str for w in ('signé', 'signe', 'convention', 'accord')) and not any(n in result_str for n in _neg2) and c.stage not in ('Signed', 'Deployed') and not data.get('stage'):
-        c.stage = 'Signed'
+    if any(w in result_str for w in ('signé', 'signe', 'convention', 'accord')) and not any(n in result_str for n in _neg2) and c.stage not in ('Signé', 'Déployé') and not data.get('stage'):
+        c.stage = 'Signé'
         c.stage_changed_at = datetime.utcnow()
     # Activity score boost
     boost_map = {'Appel': 8, 'Email': 5, 'RDV': 20, 'LinkedIn': 5, 'Relance': 3}
@@ -779,7 +779,7 @@ def api_mission():
     # Pipeline real stats
     stage_counts = {}
     for c in contacts:
-        s = c.stage or 'Prospect'
+        s = c.stage or 'Suspect'
         stage_counts[s] = stage_counts.get(s, 0) + 1
 
     # Wins this week
@@ -855,14 +855,14 @@ def api_set_goals():
 @app.route('/api/kanban')
 @login_required
 def api_kanban():
-    PROB = {'Prospect':.05,'Contacted':.15,'Meeting':.35,'Proposal':.60,'Negotiation':.80,'Signed':1.0,'Deployed':1.0}
+    PROB = {'Suspect':.05,'Identifié':.10,'Contact établi':.20,'RDV qualifié':.35,'Proposition':.50,'Négociation':.75,'Signé':1.0,'Déployé':1.0}
     def vol(s):
         m = re.search(r'(\d[\d\s]*)', str(s))
         return int(m.group(1).replace(' ','')) if m else 0
     contacts = Contact.query.all()
     by_stage = {}
     for c in contacts:
-        s = c.stage or 'Prospect'
+        s = c.stage or 'Suspect'
         if s not in by_stage: by_stage[s] = []
         by_stage[s].append({
             **c.to_dict(),
@@ -928,7 +928,7 @@ def api_toggle_task(task_id):
 def api_metrics():
     contacts = Contact.query.all()
     logs = ContactLog.query.all()
-    PROB = {'Prospect':0.05,'Contacted':0.15,'Meeting':0.35,'Proposal':0.60,'Negotiation':0.80,'Signed':1.0,'Deployed':1.0}
+    PROB = {'Suspect':0.05,'Identifié':0.10,'Contact établi':0.20,'RDV qualifié':0.35,'Proposition':0.50,'Négociation':0.75,'Signé':1.0,'Déployé':1.0}
     REV = 3000
 
     def parse_vol(s):
@@ -945,12 +945,12 @@ def api_metrics():
 
     for c in contacts:
         vol = parse_vol(c.deal_potential or '')
-        prob = PROB.get(c.stage or 'Prospect', 0.05)
+        prob = PROB.get(c.stage or 'Suspect', 0.05)
         val = vol * REV * prob
         pipeline_total += val
         pipeline_by_sector[c.sector] = pipeline_by_sector.get(c.sector, 0) + val
-        pipeline_by_stage[c.stage or 'Prospect'] = pipeline_by_stage.get(c.stage or 'Prospect', 0) + val
-        stage_counts[c.stage or 'Prospect'] = stage_counts.get(c.stage or 'Prospect', 0) + 1
+        pipeline_by_stage[c.stage or 'Suspect'] = pipeline_by_stage.get(c.stage or 'Suspect', 0) + val
+        stage_counts[c.stage or 'Suspect'] = stage_counts.get(c.stage or 'Suspect', 0) + 1
         segment_counts[c.segment or 'Long Term'] = segment_counts.get(c.segment or 'Long Term', 0) + 1
         sector_counts[c.sector or 'Autre'] = sector_counts.get(c.sector or 'Autre', 0) + 1
         score_sum += c.score or 0
@@ -992,7 +992,7 @@ def api_metrics():
         'activity_by_type': activity_by_type,
         'recent_activity': recent_list,
         'top_opportunities': [c.to_dict() for c in top_opps],
-        'signed': sum(1 for c in contacts if c.stage in ('Signed','Deployed')),
+        'signed': sum(1 for c in contacts if c.stage in ('Signé','Déployé')),
         'valid_emails': sum(1 for c in contacts if c.email_status in ('valid','Verified')),
         'total_logs': len(logs),
     })
@@ -1003,7 +1003,7 @@ def api_stats():
     total = Contact.query.count()
     strategic = Contact.query.filter_by(segment='Strategic').count()
     valid_emails = Contact.query.filter(Contact.email_status.in_(['valid', 'Verified'])).count()
-    signed = Contact.query.filter(Contact.stage.in_(['Signed', 'Deployed'])).count()
+    signed = Contact.query.filter(Contact.stage.in_(['Signé', 'Déployé'])).count()
     today_str = datetime.now().strftime('%Y-%m-%d')
     overdue = Contact.query.filter(Contact.next_action_date < today_str, Contact.done == False).count()
     return jsonify({
@@ -1108,7 +1108,7 @@ def api_quick_wins():
         has_dm = bool(c.decision_maker)
         has_action = bool(c.next_action_date)
         score = c.score_commercial or 0
-        in_pipeline = (c.stage or 'Prospect') not in ('Prospect',)
+        in_pipeline = (c.stage or 'Suspect') not in ('Suspect',)
         if has_contact and (has_dm or score >= 50) and has_action and (in_pipeline or score >= 60):
             d = c.to_dict()
             d['is_overdue'] = bool(c.next_action_date and c.next_action_date < today_str)
@@ -1368,7 +1368,7 @@ def api_import_contacts():
                 phone=_get(row, 'phone', 'Phone', 'Téléphone'),
                 linkedin=linkedin,
                 notes=_get(row, 'notes', 'Notes'),
-                stage=_get(row, 'stage', 'Stage') or 'Prospect',
+                stage=_get(row, 'stage', 'Stage') or 'Suspect',
                 priority=priority,
                 score=score,
                 poei_offer=poei_offer,
@@ -1421,7 +1421,7 @@ def api_batch_import():
                 title=(d.get('title') or '').strip(),
                 sector=_canonicalize_sector((d.get('sector') or '').strip()),
                 segment=(d.get('segment') or 'Long Term').strip(),
-                stage=(d.get('stage') or 'Prospect').strip(),
+                stage=(d.get('stage') or 'Suspect').strip(),
                 priority=(d.get('priority') or 'MEDIUM').strip().upper(),
                 score=int(d.get('score') or 0),
                 email=(d.get('email') or '').strip(),
@@ -1452,7 +1452,7 @@ def api_batch_import():
 @app.route('/api/forecast')
 @login_required
 def api_forecast():
-    PROB = {'Prospect':0.05,'Contacted':0.15,'Meeting':0.35,'Proposal':0.60,'Negotiation':0.80,'Signed':1.0,'Deployed':1.0}
+    PROB = {'Suspect':0.05,'Identifié':0.10,'Contact établi':0.20,'RDV qualifié':0.35,'Proposition':0.50,'Négociation':0.75,'Signé':1.0,'Déployé':1.0}
     REV = 3000
     def parse_vol(s):
         m = re.search(r'(\d[\d\s]*)', str(s))
@@ -1460,7 +1460,7 @@ def api_forecast():
     contacts = Contact.query.all()
     by_stage, by_sector = {}, {}
     for c in contacts:
-        s = c.stage or 'Prospect'
+        s = c.stage or 'Suspect'
         sec = (c.sector or 'Autre').replace('🧹 ','').replace('🏥 ','').replace('🏨 ','').replace('✈️ ','').replace('📦 ','').replace('🍽️ ','').replace('🏗️ ','').replace('👴 ','').replace('💼 ','').replace('🛒 ','').replace('🔷 ','')
         vol = parse_vol(c.deal_potential)
         val = vol * REV * PROB.get(s, 0.05)
@@ -1468,7 +1468,7 @@ def api_forecast():
         by_sector[sec] = by_sector.get(sec, 0) + val
     goals = _load_goals()
     pipeline_total = sum(by_stage.values())
-    signed_revenue = by_stage.get('Signed', 0) + by_stage.get('Deployed', 0)
+    signed_revenue = by_stage.get('Signé', 0) + by_stage.get('Déployé', 0)
     # Activity last 30 days
     days = {}
     logs = ContactLog.query.all()
@@ -1524,7 +1524,7 @@ def api_seed_demo():
     today = date.today().isoformat()
     demo = [
         dict(company='Groupe Elior', name='Marie Dupont', title='DRH', sector='🍽️ Restauration',
-             segment='Strategic', stage='Proposal', priority='HIGH', score=82,
+             segment='Strategic', stage='Proposition', priority='HIGH', score=82,
              email='m.dupont@elior.com', email_status='valid', phone='+33 6 12 34 56 78',
              decision_maker=True, poei_offer='POEI cuisine collective — 25 postes',
              active_offers='Cuisinier·ère de collectivité', deal_potential='25 stagiaires',
@@ -1532,14 +1532,14 @@ def api_seed_demo():
              next_action_date=(date.today() - timedelta(days=2)).isoformat(),
              alert='', linkedin='https://linkedin.com/in/mariedupont', notes='Très intéressée, attend validation DG'),
         dict(company='Onet Services', name='Thomas Bernard', title='Directeur Formation', sector='🧹 Propreté/FM',
-             segment='Strategic', stage='Meeting', priority='HIGH', score=77,
+             segment='Strategic', stage='RDV qualifié', priority='HIGH', score=77,
              email='t.bernard@onet.fr', email_status='valid', phone='+33 6 87 65 43 21',
              decision_maker=True, poei_offer='POEI Agent de service 20 postes Ile-de-France',
              active_offers='Agent propreté', deal_potential='20 stagiaires',
              action_type='RDV', next_action='RDV de présentation du dispositif POEI',
              next_action_date=today, alert='', linkedin='', notes='Premier contact LinkedIn, très réactif'),
         dict(company='Vinci Construction', name='Laure Martin', title='RRH Île-de-France', sector='🏗️ BTP',
-             segment='Quick Win', stage='Contacted', priority='HIGH', score=65,
+             segment='Quick Win', stage='Contact établi', priority='HIGH', score=65,
              email='l.martin@vinci.com', email_status='valid', phone='+33 6 55 44 33 22',
              decision_maker=False, poei_offer='POEI Conducteur de travaux — 10 postes',
              active_offers='Conducteur travaux', deal_potential='10 stagiaires',
@@ -1547,7 +1547,7 @@ def api_seed_demo():
              next_action_date=(date.today() + timedelta(days=2)).isoformat(),
              alert='🔴 NOUVEAU', linkedin='', notes='Email envoyé le 28/04'),
         dict(company='Sodexo France', name='Pierre Legrand', title='Directeur RH Opérations', sector='🍽️ Restauration',
-             segment='Strategic', stage='Negotiation', priority='HIGH', score=91,
+             segment='Strategic', stage='Négociation', priority='HIGH', score=91,
              email='p.legrand@sodexo.com', email_status='valid', phone='+33 6 11 22 33 44',
              decision_maker=True, poei_offer='POEI Agent de restauration collective — 40 postes',
              active_offers='Agent restauration', deal_potential='40 stagiaires',
@@ -1555,7 +1555,7 @@ def api_seed_demo():
              next_action_date=(date.today() + timedelta(days=5)).isoformat(),
              alert='', linkedin='https://linkedin.com/in/pierrelegrand', notes='Convention en cours de signature'),
         dict(company='Accor Hotels', name='Sophie Chen', title='DRH Hôtels France', sector='🏨 Hôtellerie',
-             segment='Quick Win', stage='Proposal', priority='HIGH', score=73,
+             segment='Quick Win', stage='Proposition', priority='HIGH', score=73,
              email='s.chen@accor.com', email_status='valid', phone='+33 6 99 88 77 66',
              decision_maker=True, poei_offer='POEI Réceptionniste / Femme de chambre — 15 postes',
              active_offers='Réceptionniste, Femme de chambre', deal_potential='15 stagiaires',
@@ -1563,7 +1563,7 @@ def api_seed_demo():
              next_action_date=(date.today() - timedelta(days=1)).isoformat(),
              alert='', linkedin='', notes='Budget formation validé pour T2 2026'),
         dict(company='Chronopost', name='Julien Moreau', title='Resp. Recrutement', sector='📦 Logistique',
-             segment='Long Term', stage='Contacted', priority='MEDIUM', score=48,
+             segment='Long Term', stage='Contact établi', priority='MEDIUM', score=48,
              email='j.moreau@chronopost.fr', email_status='unknown', phone='',
              decision_maker=False, poei_offer='POEI Agent de tri — 30 postes saisonniers',
              active_offers='Agent de tri postal', deal_potential='30 stagiaires',
@@ -1571,7 +1571,7 @@ def api_seed_demo():
              next_action_date=(date.today() + timedelta(days=7)).isoformat(),
              alert='🔴 NOUVEAU', linkedin='', notes='Contact LinkedIn — pas encore appelé'),
         dict(company='Korian Groupe', name='Isabelle Roux', title='DRH Groupe', sector='👴 Services Personne',
-             segment='Strategic', stage='Signed', priority='HIGH', score=95,
+             segment='Strategic', stage='Signé', priority='HIGH', score=95,
              email='i.roux@korian.com', email_status='valid', phone='+33 6 44 55 66 77',
              decision_maker=True, poei_offer='POEI Aide-soignant(e) — 35 postes signés',
              active_offers='Aide-soignant·e', deal_potential='35 stagiaires',
@@ -1579,7 +1579,7 @@ def api_seed_demo():
              next_action_date=(date.today() + timedelta(days=30)).isoformat(),
              alert='', linkedin='', notes='Convention signée le 15/04/2026 — démarrage juin'),
         dict(company='ADP France', name='Marc Fontaine', title='Directeur Agence Paris', sector='💼 Intérim/RH',
-             segment='Partner', stage='Meeting', priority='MEDIUM', score=60,
+             segment='Partner', stage='RDV qualifié', priority='MEDIUM', score=60,
              email='m.fontaine@adp.com', email_status='valid', phone='+33 6 77 88 99 00',
              decision_maker=True, poei_offer='Partenariat co-développement POEI multi-secteurs',
              active_offers='Partenariat prescripteur', deal_potential='50+ stagiaires/an',
@@ -1587,14 +1587,14 @@ def api_seed_demo():
              next_action_date=(date.today() + timedelta(days=3)).isoformat(),
              alert='', linkedin='https://linkedin.com/in/marcfontaine', notes='Partenaire potentiel pour pipeline prospects'),
         dict(company='Clinique du Sport Paris', name='Anne Durand', title='Directrice des soins', sector='🏥 Santé',
-             segment='Quick Win', stage='Prospect', priority='MEDIUM', score=42,
+             segment='Quick Win', stage='Suspect', priority='MEDIUM', score=42,
              email='a.durand@clinique-sport.fr', email_status='unknown', phone='',
              decision_maker=False, poei_offer='POEI Agent de service hospitalier — 8 postes',
              active_offers='ASH', deal_potential='8 stagiaires',
              action_type='Email', next_action='Envoyer email de prospection POEI santé',
              next_action_date=today, alert='🔴 NOUVEAU', linkedin='', notes=''),
         dict(company='Air France Services', name='Nicolas Petit', title='DRH Opérations', sector='✈️ Aéroportuaire',
-             segment='Long Term', stage='Prospect', priority='LOW', score=35,
+             segment='Long Term', stage='Suspect', priority='LOW', score=35,
              email='n.petit@airfrance.fr', email_status='unknown', phone='',
              decision_maker=False, poei_offer='POEI Agent d\'escale / Manutentionnaire — 20 postes',
              active_offers='Agent escale', deal_potential='20 stagiaires',
@@ -1653,6 +1653,21 @@ def _auto_setup():
             ]:
                 try:
                     conn.execute(db.text(f'ALTER TABLE contact ADD COLUMN {col} {defn}'))
+                    conn.commit()
+                except Exception:
+                    pass
+            # Migrate old English stage values → MEDDIC French nomenclature
+            for old, new in [
+                ('Prospect',    'Suspect'),
+                ('Contacted',   'Contact établi'),
+                ('Meeting',     'RDV qualifié'),
+                ('Proposal',    'Proposition'),
+                ('Negotiation', 'Négociation'),
+                ('Signed',      'Signé'),
+                ('Deployed',    'Déployé'),
+            ]:
+                try:
+                    conn.execute(db.text("UPDATE contact SET stage = :new WHERE stage = :old"), {'new': new, 'old': old})
                     conn.commit()
                 except Exception:
                     pass
