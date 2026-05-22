@@ -1688,58 +1688,59 @@ def api_save_settings():
 
 
 # ── Init automatique DB (Railway/Render : appelé au démarrage de gunicorn) ───
+def _run_ddl(sql, params=None):
+    """Execute a single DDL/DML statement in its own connection+transaction.
+    Using a fresh connection each time prevents PostgreSQL's 'aborted transaction'
+    state from silently blocking subsequent statements when one fails (e.g. duplicate column)."""
+    try:
+        with db.engine.connect() as conn:
+            conn.execute(db.text(sql), params or {})
+            conn.commit()
+        return True
+    except Exception:
+        return False
+
 def _auto_setup():
     try:
         db.create_all()
-        # Add new columns to existing tables (safe no-op if already exists)
-        with db.engine.connect() as conn:
-            for col, defn in [
-                ('archived',         'BOOLEAN DEFAULT FALSE'),
-                ('owner_id',         'INTEGER'),
-                ('score_commercial', 'INTEGER DEFAULT 0'),
-                ('score_activity',   'INTEGER DEFAULT 20'),
-                ('data_quality',     'INTEGER DEFAULT 0'),
-                ('probabilite',          'INTEGER DEFAULT NULL'),
-                ('prob_manual',          'BOOLEAN DEFAULT FALSE'),
-                ('champion_interne',     'TEXT DEFAULT NULL'),
-                ('concurrent_identifie', 'TEXT DEFAULT NULL'),
-                ('douleur_verbalisee',   'TEXT DEFAULT NULL'),
-            ]:
-                try:
-                    conn.execute(db.text(f'ALTER TABLE contact ADD COLUMN {col} {defn}'))
-                    conn.commit()
-                except Exception:
-                    pass
-            # Seed probabilite for contacts where it's NULL (based on their stage)
-            for stage, prob in _STAGE_PROB.items():
-                try:
-                    conn.execute(db.text(
-                        "UPDATE contact SET probabilite = :prob WHERE probabilite IS NULL AND stage = :stage"
-                    ), {'prob': prob, 'stage': stage})
-                    conn.commit()
-                except Exception:
-                    pass
-            # Catch-all for any remaining NULL (unknown stage)
-            try:
-                conn.execute(db.text("UPDATE contact SET probabilite = 5 WHERE probabilite IS NULL"))
-                conn.commit()
-            except Exception:
-                pass
-            # Migrate old English stage values → MEDDIC French nomenclature
-            for old, new in [
-                ('Prospect',    'Suspect'),
-                ('Contacted',   'Contact établi'),
-                ('Meeting',     'RDV qualifié'),
-                ('Proposal',    'Proposition'),
-                ('Negotiation', 'Négociation'),
-                ('Signed',      'Signé'),
-                ('Deployed',    'Déployé'),
-            ]:
-                try:
-                    conn.execute(db.text("UPDATE contact SET stage = :new WHERE stage = :old"), {'new': new, 'old': old})
-                    conn.commit()
-                except Exception:
-                    pass
+        # Detect PostgreSQL to use IF NOT EXISTS (avoids transaction-abort cascade)
+        _is_pg = db.engine.url.drivername.startswith('postgresql')
+        _if_not = 'IF NOT EXISTS' if _is_pg else ''
+
+        # Add new columns — each in its own connection so one failure never blocks the next
+        for col, defn in [
+            ('archived',             'BOOLEAN DEFAULT FALSE'),
+            ('owner_id',             'INTEGER'),
+            ('score_commercial',     'INTEGER DEFAULT 0'),
+            ('score_activity',       'INTEGER DEFAULT 20'),
+            ('data_quality',         'INTEGER DEFAULT 0'),
+            ('probabilite',          'INTEGER DEFAULT NULL'),
+            ('prob_manual',          'BOOLEAN DEFAULT FALSE'),
+            ('champion_interne',     'TEXT DEFAULT NULL'),
+            ('concurrent_identifie', 'TEXT DEFAULT NULL'),
+            ('douleur_verbalisee',   'TEXT DEFAULT NULL'),
+        ]:
+            _run_ddl(f'ALTER TABLE contact ADD COLUMN {_if_not} {col} {defn}')
+
+        # Seed probabilite for contacts where it's NULL (based on their stage)
+        for stage, prob in _STAGE_PROB.items():
+            _run_ddl(
+                "UPDATE contact SET probabilite = :prob WHERE probabilite IS NULL AND stage = :stage",
+                {'prob': prob, 'stage': stage}
+            )
+        _run_ddl("UPDATE contact SET probabilite = 5 WHERE probabilite IS NULL")
+
+        # Migrate old English stage values → MEDDIC French nomenclature
+        for old, new in [
+            ('Prospect',    'Suspect'),
+            ('Contacted',   'Contact établi'),
+            ('Meeting',     'RDV qualifié'),
+            ('Proposal',    'Proposition'),
+            ('Negotiation', 'Négociation'),
+            ('Signed',      'Signé'),
+            ('Deployed',    'Déployé'),
+        ]:
+            _run_ddl("UPDATE contact SET stage = :new WHERE stage = :old", {'new': new, 'old': old})
         if not User.query.filter_by(username='admin').first():
             pw = bcrypt.generate_password_hash('Admin2026!').decode()
             db.session.add(User(
