@@ -118,6 +118,9 @@ class Contact(db.Model):
     data_quality     = db.Column(db.Integer, default=0)
     probabilite      = db.Column(db.Integer, default=None)   # 0-100, probabilité manuelle de closing
     prob_manual      = db.Column(db.Boolean, default=False)  # True si modifiée manuellement
+    champion_interne     = db.Column(db.Text)
+    concurrent_identifie = db.Column(db.Text)
+    douleur_verbalisee   = db.Column(db.Text)
     logs = db.relationship('ContactLog', backref='contact', lazy=True, cascade='all,delete-orphan')
     __table_args__ = (
         db.Index('ix_contact_archived_score', 'archived', 'score_commercial'),
@@ -160,6 +163,9 @@ class Contact(db.Model):
             'data_quality': self.data_quality or 0,
             'probabilite': self.probabilite,
             'prob_manual': bool(self.prob_manual),
+            'champion_interne': self.champion_interne or '',
+            'concurrent_identifie': self.concurrent_identifie or '',
+            'douleur_verbalisee': self.douleur_verbalisee or '',
             'log': [l.to_dict() for l in self.logs],
         }
 
@@ -587,7 +593,8 @@ def api_update_contact(cid):
     UPDATABLE = ['company','name','title','sector','segment','stage','priority','score',
                  'email','email_status','phone','decision_maker','poei_offer','active_offers',
                  'action_type','next_action','next_action_date','deal_potential','alert',
-                 'linkedin','notes','owner_id','probabilite','prob_manual']
+                 'linkedin','notes','owner_id','probabilite','prob_manual',
+                 'champion_interne','concurrent_identifie','douleur_verbalisee']
     segment_manually_set = 'segment' in data
     for field in UPDATABLE:
         if field in data:
@@ -1127,6 +1134,10 @@ def api_to_enrich():
             reasons.append('Décideur non identifié')
         if not c.poei_offer:
             reasons.append('Offre POEI non définie')
+        if not c.champion_interne:
+            reasons.append('Champion non identifié')
+        if not c.douleur_verbalisee:
+            reasons.append('Douleur non documentée')
         if reasons:
             d = c.to_dict()
             d['missing_reasons'] = reasons
@@ -1688,8 +1699,11 @@ def _auto_setup():
                 ('score_commercial', 'INTEGER DEFAULT 0'),
                 ('score_activity',   'INTEGER DEFAULT 20'),
                 ('data_quality',     'INTEGER DEFAULT 0'),
-                ('probabilite',      'INTEGER DEFAULT NULL'),
-                ('prob_manual',      'BOOLEAN DEFAULT FALSE'),
+                ('probabilite',          'INTEGER DEFAULT NULL'),
+                ('prob_manual',          'BOOLEAN DEFAULT FALSE'),
+                ('champion_interne',     'TEXT DEFAULT NULL'),
+                ('concurrent_identifie', 'TEXT DEFAULT NULL'),
+                ('douleur_verbalisee',   'TEXT DEFAULT NULL'),
             ]:
                 try:
                     conn.execute(db.text(f'ALTER TABLE contact ADD COLUMN {col} {defn}'))

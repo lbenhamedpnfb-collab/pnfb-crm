@@ -259,13 +259,17 @@ function scoreTag(n) {
 }
 function qualityDot(c) {
   const q = c.data_quality ?? 0;
-  const col = q>=3?'#0F9D58':q>=2?'#F5A623':'#E8500A';
   const tips = [];
   if(!c.email||c.email_status==='invalid') tips.push('email');
-  if(!c.phone) tips.push('tel');
+  if(!c.phone) tips.push('tél');
   if(!c.decision_maker) tips.push('décideur');
   if(!c.poei_offer) tips.push('POEI');
-  const tip = tips.length ? `Manque : ${tips.join(', ')}` : 'Fiche complète';
+  if(!c.champion_interne) tips.push('champion');
+  if(!c.douleur_verbalisee) tips.push('douleur');
+  const total = 6;
+  const missing = tips.length;
+  const col = missing===0?'#0F9D58':missing<=2?'#F5A623':'#E8500A';
+  const tip = missing ? `Manque : ${tips.join(', ')}` : 'Fiche complète';
   return `<span title="${tip}" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${col};flex-shrink:0"></span>`;
 }
 function stagnationBadge(c) {
@@ -382,11 +386,13 @@ async function loadEnrich() {
 
 function rEnrich(list) {
   if(!list.length) return `<div class="empty"><div class="ei">⚙</div><h3>Toutes les fiches sont complètes</h3><p>Excellent ! Chaque contact a email, téléphone, décideur et offre POEI renseignés.</p></div>`;
-  const noContact = list.filter(c=>!c.email&&!c.phone).length;
-  const noDm      = list.filter(c=>!c.decision_maker).length;
-  const noPoei    = list.filter(c=>!c.poei_offer).length;
+  const noContact  = list.filter(c=>!c.email&&!c.phone).length;
+  const noDm       = list.filter(c=>!c.decision_maker).length;
+  const noPoei     = list.filter(c=>!c.poei_offer).length;
+  const noChampion = list.filter(c=>!c.champion_interne).length;
+  const noDouleur  = list.filter(c=>!c.douleur_verbalisee).length;
   let h = `<div style="background:#FFF0EA;border:1px solid #E8500A22;border-left:3px solid #E8500A;border-radius:6px;padding:10px 14px;margin-bottom:16px;font-size:12px;color:#7a2800">
-    ⚙ <strong>${list.length} contacts à enrichir</strong> — priorité : les contacts avec le meilleur score commercial. ${noContact} sans email ni téléphone · ${noDm} sans décideur · ${noPoei} sans offre POEI.
+    ⚙ <strong>${list.length} contacts à enrichir</strong> — ${noContact} sans contact · ${noDm} sans décideur · ${noPoei} sans POEI · ${noChampion} sans champion · ${noDouleur} sans douleur documentée.
   </div>`;
   h += '<div class="tbl-wrap"><table><thead><tr><th>Entreprise</th><th>Contact</th><th>Score</th><th>Segment</th><th>Manque</th><th>Action</th></tr></thead><tbody>';
   list.forEach(c => {
@@ -1072,6 +1078,17 @@ function openC(id) {
     <div class="info-item"><div class="ik">LinkedIn</div><div class="iv">${c.linkedin?`<a href="${esc(c.linkedin)}" target="_blank">Voir le profil →</a>`:'—'}</div></div>
   `;
   document.getElementById('mo-poei').innerHTML=`<div class="pt">${esc(c.poei_offer||'Non défini')}</div><div class="ps">${esc(c.active_offers||'')} &nbsp;·&nbsp; ${esc(c.deal_potential||'')}</div>`;
+  // MEDDIC section
+  const meddicEl = document.getElementById('mo-meddic');
+  if(meddicEl) {
+    const mRow = (icon, label, val, fallback) =>
+      `<div class="info-item"><div class="ik">${icon} ${label}</div><div class="iv" style="${val?'':'color:var(--mu);font-style:italic'}">${val ? esc(val) : fallback}</div></div>`;
+    meddicEl.innerHTML = [
+      mRow('🏆','Champion interne',c.champion_interne,'Non identifié'),
+      mRow('⚔️','Concurrent identifié',c.concurrent_identifie,'Non identifié'),
+      mRow('💬','Douleur verbalisée',c.douleur_verbalisee,'Non documentée'),
+    ].join('');
+  }
   document.getElementById('mo-stage').value=c.stage||'Suspect';
   const _probPct = c.probabilite != null ? c.probabilite : (STAGE_PROB_PCT[c.stage||'Suspect'] || 5);
   const _probEl = document.getElementById('mo-prob');
@@ -2391,6 +2408,14 @@ function openContactForm(id=null) {
     document.getElementById('fd-poei').value = c.poei_offer||'';
     document.getElementById('fd-offers').value = c.active_offers||'';
     document.getElementById('fd-deal').value = c.deal_potential||'';
+    document.getElementById('fd-champion').value = c.champion_interne||'';
+    document.getElementById('fd-concurrent').value = c.concurrent_identifie||'';
+    document.getElementById('fd-douleur').value = c.douleur_verbalisee||'';
+    // Auto-open MEDDIC section if any field is filled
+    if(c.champion_interne||c.concurrent_identifie||c.douleur_verbalisee) {
+      document.getElementById('meddic-fields').style.display='';
+      document.getElementById('meddic-arrow').style.transform='rotate(90deg)';
+    }
     document.getElementById('fd-action-type').value = c.action_type||'Email';
     document.getElementById('fd-action-date').value = c.next_action_date||'';
     document.getElementById('fd-action-txt').value = c.next_action||'';
@@ -2400,7 +2425,10 @@ function openContactForm(id=null) {
     delBtn.style.display = 'none';
     // Reset form
     ['fd-company','fd-name','fd-title','fd-email','fd-phone','fd-linkedin',
-     'fd-poei','fd-offers','fd-deal','fd-action-txt','fd-notes'].forEach(id=>document.getElementById(id).value='');
+     'fd-poei','fd-offers','fd-deal','fd-action-txt','fd-notes',
+     'fd-champion','fd-concurrent','fd-douleur'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('meddic-fields').style.display='none';
+    document.getElementById('meddic-arrow').style.transform='';
     document.getElementById('fd-sector').value = '🧹 Propreté/FM';
     document.getElementById('fd-segment').value = 'Long Term';
     document.getElementById('fd-stage').value = 'Suspect';
@@ -2422,6 +2450,15 @@ function openContactForm(id=null) {
 
   overlay.classList.add('show');
   drawer.classList.add('open');
+}
+
+function toggleMeddicSection() {
+  const fields = document.getElementById('meddic-fields');
+  const arrow = document.getElementById('meddic-arrow');
+  if(!fields) return;
+  const open = fields.style.display !== 'none';
+  fields.style.display = open ? 'none' : '';
+  if(arrow) arrow.style.transform = open ? '' : 'rotate(90deg)';
 }
 
 function onFdStageChange(v) {
@@ -2472,6 +2509,9 @@ async function saveContact() {
     next_action_date: document.getElementById('fd-action-date').value,
     next_action: document.getElementById('fd-action-txt').value.trim(),
     notes: document.getElementById('fd-notes').value.trim(),
+    champion_interne: document.getElementById('fd-champion').value.trim(),
+    concurrent_identifie: document.getElementById('fd-concurrent').value.trim(),
+    douleur_verbalisee: document.getElementById('fd-douleur').value.trim(),
     alert: _formContactId ? '' : '🔴 NOUVEAU',
   };
 

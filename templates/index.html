@@ -232,6 +232,10 @@
     <div class="mo-body">
       <div class="mo-sec"><h4>Informations</h4><div class="info-grid" id="mo-info"></div></div>
       <div class="mo-sec"><h4>POEI / Opportunité</h4><div class="poei-box" id="mo-poei"></div></div>
+      <div class="mo-sec" id="mo-meddic-sec">
+        <h4>🎯 Qualification MEDDIC</h4>
+        <div id="mo-meddic"></div>
+      </div>
       <div class="mo-sec">
         <h4>Stade Pipeline</h4>
         <select class="stage-sel" id="mo-stage" onchange="updStage(this.value)">
@@ -431,6 +435,29 @@
           <label>Score <span id="fd-score-val" style="color:var(--ac);font-weight:900">50</span>/100</label>
           <input type="range" min="0" max="100" value="50" id="fd-score" class="score-slider"
             oninput="document.getElementById('fd-score-val').textContent=this.value;this.style.setProperty('--pct',this.value+'%')">
+        </div>
+      </div>
+    </div>
+
+    <div class="fd-section">
+      <div class="fd-section-title" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between" onclick="toggleMeddicSection()">
+        🎯 Qualification MEDDIC
+        <span id="meddic-arrow" style="font-size:16px;display:inline-block;transition:.2s;color:var(--mu)">›</span>
+      </div>
+      <div id="meddic-fields" style="display:none;margin-top:10px">
+        <div class="fd-grid">
+          <div class="fd-field fd-full">
+            <label>🏆 Champion interne</label>
+            <input type="text" id="fd-champion" placeholder="Ex : Marie Dupont — DRH adjointe, supportrice du projet">
+          </div>
+          <div class="fd-field fd-full">
+            <label>⚔️ Concurrent identifié</label>
+            <input type="text" id="fd-concurrent" placeholder="Ex : Randstad Inhouse, AFPA">
+          </div>
+          <div class="fd-field fd-full">
+            <label>💬 Douleur verbalisée</label>
+            <textarea id="fd-douleur" rows="3" placeholder="Ex : 'On a 200 postes non pourvus cet été et on ne sait pas comment les former'"></textarea>
+          </div>
         </div>
       </div>
     </div>
