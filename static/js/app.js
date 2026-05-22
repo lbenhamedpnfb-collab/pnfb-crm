@@ -1087,9 +1087,21 @@ function openC(id) {
   // MEDDIC section
   const meddicEl = document.getElementById('mo-meddic');
   if(meddicEl) {
+    const ms = c.meddic_score || 0;
+    const mc = meddicColor(ms);
+    const pct = Math.round(ms / 28 * 100);
     const mRow = (icon, label, val, fallback) =>
       `<div class="info-item"><div class="ik">${icon} ${label}</div><div class="iv" style="${val?'':'color:var(--mu);font-style:italic'}">${val ? esc(val) : fallback}</div></div>`;
-    meddicEl.innerHTML = [
+    meddicEl.innerHTML = `
+      <div style="margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <span style="font-size:13px;font-weight:800;color:${mc}">${ms}/28</span>
+          <span style="font-size:11px;color:var(--mu)">${ms<=7?'Faible':ms<=14?'Moyen':ms<=21?'Bon':'Excellent'}</span>
+        </div>
+        <div style="height:6px;background:var(--bd);border-radius:3px;overflow:hidden">
+          <div style="height:100%;width:${pct}%;background:${mc};transition:.3s"></div>
+        </div>
+      </div>` + [
       mRow('🏆','Champion interne',c.champion_interne,'Non identifié'),
       mRow('⚔️','Concurrent identifié',c.concurrent_identifie,'Non identifié'),
       mRow('💬','Douleur verbalisée',c.douleur_verbalisee,'Non documentée'),
@@ -1262,6 +1274,34 @@ const PRODUIT_REVENUS = {
   'POEI 400h': 6000, 'POEI 300h': 5400,
   'Alternance CAP': 7500, 'Alternance Bac Pro': 8500, 'Alternance BTS': 9000
 };
+const MEDDIC_KEYS = [
+  'meddic_metrics','meddic_economic_buyer','meddic_decision_criteria',
+  'meddic_decision_process','meddic_identify_pain',
+  'meddic_champion','meddic_competition'
+];
+function meddicColor(score) {
+  return score <= 7 ? '#ef4444' : score <= 14 ? '#f97316' : score <= 21 ? '#eab308' : '#22c55e';
+}
+function meddicBadge(c) {
+  const ms = c.meddic_score || 0;
+  const col = meddicColor(ms);
+  return `<span style="font-size:10px;font-weight:800;padding:1px 6px;border-radius:4px;background:${col}22;color:${col};border:1px solid ${col}44">${ms}/28 MEDDIC</span>`;
+}
+function updateMeddicScore() {
+  let total = 0;
+  MEDDIC_KEYS.forEach(k => {
+    const el = document.getElementById('f-' + k);
+    const val = parseInt(el?.value || 0);
+    const vEl = document.getElementById('f-' + k + '-val');
+    if (vEl) vEl.textContent = val;
+    total += val;
+  });
+  const display = document.getElementById('meddic-total-display');
+  if (display) {
+    display.textContent = 'Score MEDDIC : ' + total + '/28';
+    display.style.color = meddicColor(total);
+  }
+}
 function contactProb(c) {
   // Returns probability as 0-1 float. Uses per-contact probabilite if set, else stage default.
   const pct = c.probabilite != null ? c.probabilite : (STAGE_PROB_PCT[c.stage||'Suspect'] || 5);
@@ -1611,7 +1651,7 @@ function kbCard(c, col) {
     <div class="kb-card-inner">
       <div class="kb-card-company">${esc(c.company)}</div>
       ${c.sector ? `<div class="kb-card-sector" style="color:${secColor(c.sector)}">${esc(c.sector)}</div>` : ''}
-      <div class="kb-card-tags">${segTag(c.segment)}${scoreTag(c.score)}${probBadge}</div>
+      <div class="kb-card-tags">${segTag(c.segment)}${meddicBadge(c)}${probBadge}</div>
       ${produitLine}
       ${c.next_action ? `<div class="kb-card-action">${esc(c.next_action.substring(0, 45))}</div>` : ''}
       ${overdue ? `<div class="kb-card-overdue">⚠️ EN RETARD</div>` : ''}
@@ -2472,8 +2512,16 @@ function openContactForm(id=null) {
     document.getElementById('fd-champion').value = c.champion_interne||'';
     document.getElementById('fd-concurrent').value = c.concurrent_identifie||'';
     document.getElementById('fd-douleur').value = c.douleur_verbalisee||'';
-    // Auto-open MEDDIC section if any field is filled
-    if(c.champion_interne||c.concurrent_identifie||c.douleur_verbalisee) {
+    // Populate MEDDIC sliders
+    MEDDIC_KEYS.forEach(k => {
+      const el = document.getElementById('f-' + k);
+      if(el) el.value = c[k] || 0;
+      const vEl = document.getElementById('f-' + k + '-val');
+      if(vEl) vEl.textContent = c[k] || 0;
+    });
+    updateMeddicScore();
+    // Auto-open MEDDIC section if any field is filled or meddic_score > 0
+    if(c.champion_interne||c.concurrent_identifie||c.douleur_verbalisee||(c.meddic_score||0)>0) {
       document.getElementById('meddic-fields').style.display='';
       document.getElementById('meddic-arrow').style.transform='rotate(90deg)';
     }
@@ -2493,6 +2541,13 @@ function openContactForm(id=null) {
      'fd-champion','fd-concurrent','fd-douleur'].forEach(id=>document.getElementById(id).value='');
     document.getElementById('meddic-fields').style.display='none';
     document.getElementById('meddic-arrow').style.transform='';
+    MEDDIC_KEYS.forEach(k => {
+      const el = document.getElementById('f-' + k);
+      if(el) el.value = 0;
+      const vEl = document.getElementById('f-' + k + '-val');
+      if(vEl) vEl.textContent = 0;
+    });
+    updateMeddicScore();
     document.getElementById('f-produit-type').value = '';
     document.getElementById('f-volume-recrutements').value = '';
     document.getElementById('f-ca-estime-display').value = '';
@@ -2595,6 +2650,7 @@ async function saveContact() {
     douleur_verbalisee: document.getElementById('fd-douleur').value.trim(),
     produit_type: document.getElementById('f-produit-type').value,
     volume_recrutements: parseInt(document.getElementById('f-volume-recrutements').value) || null,
+    ...Object.fromEntries(MEDDIC_KEYS.map(k => [k, parseInt(document.getElementById('f-'+k)?.value)||0])),
     alert: _formContactId ? '' : '🔴 NOUVEAU',
   };
 

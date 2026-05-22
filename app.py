@@ -121,8 +121,16 @@ class Contact(db.Model):
     champion_interne     = db.Column(db.Text)
     concurrent_identifie = db.Column(db.Text)
     douleur_verbalisee   = db.Column(db.Text)
-    produit_type         = db.Column(db.String(100))
-    volume_recrutements  = db.Column(db.Integer)
+    produit_type             = db.Column(db.String(100))
+    volume_recrutements      = db.Column(db.Integer)
+    meddic_metrics           = db.Column(db.Integer, default=0)
+    meddic_economic_buyer    = db.Column(db.Integer, default=0)
+    meddic_decision_criteria = db.Column(db.Integer, default=0)
+    meddic_decision_process  = db.Column(db.Integer, default=0)
+    meddic_identify_pain     = db.Column(db.Integer, default=0)
+    meddic_champion          = db.Column(db.Integer, default=0)
+    meddic_competition       = db.Column(db.Integer, default=0)
+    meddic_score             = db.Column(db.Integer, default=0)
     logs = db.relationship('ContactLog', backref='contact', lazy=True, cascade='all,delete-orphan')
     __table_args__ = (
         db.Index('ix_contact_archived_score', 'archived', 'score_commercial'),
@@ -171,6 +179,14 @@ class Contact(db.Model):
             'produit_type': self.produit_type or '',
             'volume_recrutements': self.volume_recrutements,
             'ca_estime': _ca_estime(self),
+            'meddic_metrics':           self.meddic_metrics or 0,
+            'meddic_economic_buyer':    self.meddic_economic_buyer or 0,
+            'meddic_decision_criteria': self.meddic_decision_criteria or 0,
+            'meddic_decision_process':  self.meddic_decision_process or 0,
+            'meddic_identify_pain':     self.meddic_identify_pain or 0,
+            'meddic_champion':          self.meddic_champion or 0,
+            'meddic_competition':       self.meddic_competition or 0,
+            'meddic_score':             self.meddic_score or 0,
             'log': [l.to_dict() for l in self.logs],
         }
 
@@ -381,6 +397,11 @@ _PRODUIT_REVENUS = {
     'POEI 400h': 6000, 'POEI 300h': 5400,
     'Alternance CAP': 7500, 'Alternance Bac Pro': 8500, 'Alternance BTS': 9000,
 }
+_MEDDIC_KEYS = [
+    'meddic_metrics', 'meddic_economic_buyer', 'meddic_decision_criteria',
+    'meddic_decision_process', 'meddic_identify_pain',
+    'meddic_champion', 'meddic_competition',
+]
 
 def _stage_default_prob(stage):
     return _STAGE_PROB.get(stage or 'Suspect', 5)
@@ -408,6 +429,7 @@ def compute_commercial_score(c):
     return min(100, s)
 
 def _recompute_scores(c):
+    c.meddic_score = sum(getattr(c, k) or 0 for k in _MEDDIC_KEYS)
     c.score_commercial = compute_commercial_score(c)
     c.data_quality = sum([
         1 if (c.email and (c.email_status or '').lower() not in ('invalid', 'unknown', '')) else 0,
@@ -630,7 +652,10 @@ def api_update_contact(cid):
                  'action_type','next_action','next_action_date','deal_potential','alert',
                  'linkedin','notes','owner_id','probabilite','prob_manual',
                  'champion_interne','concurrent_identifie','douleur_verbalisee',
-                 'produit_type','volume_recrutements']
+                 'produit_type','volume_recrutements',
+                 'meddic_metrics','meddic_economic_buyer','meddic_decision_criteria',
+                 'meddic_decision_process','meddic_identify_pain',
+                 'meddic_champion','meddic_competition']
     segment_manually_set = 'segment' in data
     for field in UPDATABLE:
         if field in data:
@@ -1760,8 +1785,16 @@ def _auto_setup():
             ('champion_interne',     'TEXT DEFAULT NULL'),
             ('concurrent_identifie', 'TEXT DEFAULT NULL'),
             ('douleur_verbalisee',   'TEXT DEFAULT NULL'),
-            ('produit_type',         'VARCHAR(100) DEFAULT NULL'),
-            ('volume_recrutements',  'INTEGER DEFAULT NULL'),
+            ('produit_type',             'VARCHAR(100) DEFAULT NULL'),
+            ('volume_recrutements',      'INTEGER DEFAULT NULL'),
+            ('meddic_metrics',           'INTEGER DEFAULT 0'),
+            ('meddic_economic_buyer',    'INTEGER DEFAULT 0'),
+            ('meddic_decision_criteria', 'INTEGER DEFAULT 0'),
+            ('meddic_decision_process',  'INTEGER DEFAULT 0'),
+            ('meddic_identify_pain',     'INTEGER DEFAULT 0'),
+            ('meddic_champion',          'INTEGER DEFAULT 0'),
+            ('meddic_competition',       'INTEGER DEFAULT 0'),
+            ('meddic_score',             'INTEGER DEFAULT 0'),
         ]:
             _run_ddl(f'ALTER TABLE contact ADD COLUMN {_if_not} {col} {defn}')
 

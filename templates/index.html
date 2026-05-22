@@ -449,17 +449,55 @@
         <span id="meddic-arrow" style="font-size:16px;display:inline-block;transition:.2s;color:var(--mu)">›</span>
       </div>
       <div id="meddic-fields" style="display:none;margin-top:10px">
+        <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px">
+          <div style="display:grid;grid-template-columns:1fr 100px 36px;gap:8px;align-items:center">
+            <div><div style="font-size:12px;font-weight:700">📊 Metrics</div><div style="font-size:11px;color:var(--mu)">ROI et volume chiffrés</div></div>
+            <input type="range" min="0" max="4" value="0" id="f-meddic_metrics" oninput="updateMeddicScore()">
+            <span style="font-size:12px;font-weight:800;text-align:right"><span id="f-meddic_metrics-val">0</span>/4</span>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 100px 36px;gap:8px;align-items:center">
+            <div><div style="font-size:12px;font-weight:700">💼 Economic Buyer</div><div style="font-size:11px;color:var(--mu)">DG/DRH identifié et contacté</div></div>
+            <input type="range" min="0" max="4" value="0" id="f-meddic_economic_buyer" oninput="updateMeddicScore()">
+            <span style="font-size:12px;font-weight:800;text-align:right"><span id="f-meddic_economic_buyer-val">0</span>/4</span>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 100px 36px;gap:8px;align-items:center">
+            <div><div style="font-size:12px;font-weight:700">📋 Decision Criteria</div><div style="font-size:11px;color:var(--mu)">Critères de choix connus</div></div>
+            <input type="range" min="0" max="4" value="0" id="f-meddic_decision_criteria" oninput="updateMeddicScore()">
+            <span style="font-size:12px;font-weight:800;text-align:right"><span id="f-meddic_decision_criteria-val">0</span>/4</span>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 100px 36px;gap:8px;align-items:center">
+            <div><div style="font-size:12px;font-weight:700">🔄 Decision Process</div><div style="font-size:11px;color:var(--mu)">Étapes de validation internes</div></div>
+            <input type="range" min="0" max="4" value="0" id="f-meddic_decision_process" oninput="updateMeddicScore()">
+            <span style="font-size:12px;font-weight:800;text-align:right"><span id="f-meddic_decision_process-val">0</span>/4</span>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 100px 36px;gap:8px;align-items:center">
+            <div><div style="font-size:12px;font-weight:700">💬 Identify Pain</div><div style="font-size:11px;color:var(--mu)">Douleur verbalisée et chiffrée</div></div>
+            <input type="range" min="0" max="4" value="0" id="f-meddic_identify_pain" oninput="updateMeddicScore()">
+            <span style="font-size:12px;font-weight:800;text-align:right"><span id="f-meddic_identify_pain-val">0</span>/4</span>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 100px 36px;gap:8px;align-items:center">
+            <div><div style="font-size:12px;font-weight:700">🏆 Champion</div><div style="font-size:11px;color:var(--mu)">Défenseur interne identifié</div></div>
+            <input type="range" min="0" max="4" value="0" id="f-meddic_champion" oninput="updateMeddicScore()">
+            <span style="font-size:12px;font-weight:800;text-align:right"><span id="f-meddic_champion-val">0</span>/4</span>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 100px 36px;gap:8px;align-items:center">
+            <div><div style="font-size:12px;font-weight:700">⚔️ Competition</div><div style="font-size:11px;color:var(--mu)">Concurrents identifiés</div></div>
+            <input type="range" min="0" max="4" value="0" id="f-meddic_competition" oninput="updateMeddicScore()">
+            <span style="font-size:12px;font-weight:800;text-align:right"><span id="f-meddic_competition-val">0</span>/4</span>
+          </div>
+        </div>
+        <div id="meddic-total-display" style="text-align:center;padding:8px 12px;border-radius:6px;background:var(--bg);margin-bottom:14px;font-size:14px;font-weight:bold;color:#ef4444">Score MEDDIC : 0/28</div>
         <div class="fd-grid">
           <div class="fd-field fd-full">
-            <label>🏆 Champion interne</label>
+            <label>🏆 Champion interne (texte libre)</label>
             <input type="text" id="fd-champion" placeholder="Ex : Marie Dupont — DRH adjointe, supportrice du projet">
           </div>
           <div class="fd-field fd-full">
-            <label>⚔️ Concurrent identifié</label>
+            <label>⚔️ Concurrent identifié (texte libre)</label>
             <input type="text" id="fd-concurrent" placeholder="Ex : Randstad Inhouse, AFPA">
           </div>
           <div class="fd-field fd-full">
-            <label>💬 Douleur verbalisée</label>
+            <label>💬 Douleur verbalisée (texte libre)</label>
             <textarea id="fd-douleur" rows="3" placeholder="Ex : 'On a 200 postes non pourvus cet été et on ne sait pas comment les former'"></textarea>
           </div>
         </div>
