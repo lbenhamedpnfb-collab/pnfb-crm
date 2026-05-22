@@ -1722,10 +1722,12 @@ def _auto_setup():
         ]:
             _run_ddl(f'ALTER TABLE contact ADD COLUMN {_if_not} {col} {defn}')
 
-        # Seed probabilite for contacts where it's NULL (based on their stage)
+        # Resync probabilite for all non-manual contacts to match their current stage.
+        # Using prob_manual = FALSE (not just NULL) so contacts whose stage changed via
+        # direct SQL (e.g. the MEDDIC migration) are also corrected.
         for stage, prob in _STAGE_PROB.items():
             _run_ddl(
-                "UPDATE contact SET probabilite = :prob WHERE probabilite IS NULL AND stage = :stage",
+                "UPDATE contact SET probabilite = :prob WHERE (prob_manual = FALSE OR prob_manual IS NULL) AND stage = :stage",
                 {'prob': prob, 'stage': stage}
             )
         _run_ddl("UPDATE contact SET probabilite = 5 WHERE probabilite IS NULL")

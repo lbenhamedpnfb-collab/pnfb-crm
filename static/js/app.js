@@ -1633,6 +1633,8 @@ async function kbDrop(e, newStage) {
   const res = await apiPatch(id, {stage: newStage});
   if(res) {
     G.contacts = G.contacts.map(x => x.id===id ? {...x, ...res} : x);
+    // Re-render with server data so probabilite badge reflects the updated value
+    document.getElementById('content').innerHTML = rKanban();
     toast(`${esc(c.company)} → ${KB_LABELS[newStage]}`, 'success');
     const bdgToday = document.getElementById('bdg-today');
     if(bdgToday) updSidebar();
