@@ -116,6 +116,8 @@ class Contact(db.Model):
     score_commercial = db.Column(db.Integer, default=0)
     score_activity   = db.Column(db.Integer, default=20)
     data_quality     = db.Column(db.Integer, default=0)
+    probabilite      = db.Column(db.Integer, default=None)   # 0-100, probabilité manuelle de closing
+    prob_manual      = db.Column(db.Boolean, default=False)  # True si modifiée manuellement
     logs = db.relationship('ContactLog', backref='contact', lazy=True, cascade='all,delete-orphan')
     __table_args__ = (
         db.Index('ix_contact_archived_score', 'archived', 'score_commercial'),
@@ -156,6 +158,8 @@ class Contact(db.Model):
             'score_commercial': self.score_commercial or 0,
             'score_activity': self.score_activity or 20,
             'data_quality': self.data_quality or 0,
+            'probabilite': self.probabilite,
+            'prob_manual': bool(self.prob_manual),
             'log': [l.to_dict() for l in self.logs],
         }
 
@@ -352,6 +356,15 @@ _PRIORITY_SECTORS = {'propreté', 'proprete', 'btp', 'batiment', 'bâtiment', 'r
 _DECISION_TITLES  = {'drh', 'rrh', 'directeur', 'pdg', 'gérant', 'gerant', 'responsable recrutement',
                      'chef', 'dg', 'daf', 'responsable rh', 'directrice', 'manager rh'}
 
+_STAGE_PROB = {
+    'Suspect': 5, 'Identifié': 10, 'Contact établi': 20,
+    'RDV qualifié': 35, 'Proposition': 50, 'Négociation': 75,
+    'Signé': 100, 'Déployé': 100,
+}
+
+def _stage_default_prob(stage):
+    return _STAGE_PROB.get(stage or 'Suspect', 5)
+
 def compute_commercial_score(c):
     s = 0
     if c.decision_maker: s += 20
@@ -485,10 +498,17 @@ def _canonicalize_sector(s):
 @login_required
 def api_create_contact():
     data = request.get_json()
+    _stage = data.get('stage','Suspect')
+    _prob_manual = bool(data.get('prob_manual', False))
+    _prob = data.get('probabilite')
+    if _prob is None:
+        _prob = _stage_default_prob(_stage)
+    else:
+        _prob = int(_prob)
     c = Contact(
         company=data.get('company',''), name=data.get('name',''),
         title=data.get('title',''), sector=_canonicalize_sector(data.get('sector','')),
-        segment=data.get('segment','Long Term'), stage=data.get('stage','Suspect'),
+        segment=data.get('segment','Long Term'), stage=_stage,
         priority=data.get('priority','MEDIUM'), score=int(data.get('score',50)),
         email=data.get('email',''), email_status=data.get('email_status','unknown'),
         phone=data.get('phone',''), decision_maker=bool(data.get('decision_maker',False)),
@@ -496,7 +516,7 @@ def api_create_contact():
         action_type=data.get('action_type','Email'), next_action=data.get('next_action',''),
         next_action_date=data.get('next_action_date',''), deal_potential=data.get('deal_potential',''),
         alert=data.get('alert',''), linkedin=data.get('linkedin',''), notes=data.get('notes',''),
-        done=False
+        done=False, probabilite=_prob, prob_manual=_prob_manual
     )
     db.session.add(c)
     db.session.flush()
@@ -567,7 +587,7 @@ def api_update_contact(cid):
     UPDATABLE = ['company','name','title','sector','segment','stage','priority','score',
                  'email','email_status','phone','decision_maker','poei_offer','active_offers',
                  'action_type','next_action','next_action_date','deal_potential','alert',
-                 'linkedin','notes','owner_id']
+                 'linkedin','notes','owner_id','probabilite','prob_manual']
     segment_manually_set = 'segment' in data
     for field in UPDATABLE:
         if field in data:
@@ -575,6 +595,12 @@ def api_update_contact(cid):
             setattr(c, field, val)
     if '_done' in data:
         c.done = bool(data['_done'])
+    # Auto-update probability when stage changes (unless probability was manually set)
+    if 'stage' in data and 'probabilite' not in data and not c.prob_manual:
+        c.probabilite = _stage_default_prob(data['stage'])
+    # If probabilite is now None (never set), seed it from current stage
+    if c.probabilite is None:
+        c.probabilite = _stage_default_prob(c.stage)
     _recompute_scores(c)
     if not segment_manually_set:
         c.segment = _auto_segment(c)
@@ -603,15 +629,21 @@ def api_add_log(cid):
     if c.stage == 'Suspect' and log_type in ('Email', 'Appel', 'LinkedIn'):
         c.stage = 'Contact établi'
         c.stage_changed_at = datetime.utcnow()
+        if not c.prob_manual:
+            c.probabilite = _stage_default_prob('Contact établi')
     if log_type == 'RDV' and c.stage in ('Suspect', 'Contact établi'):
         c.stage = 'RDV qualifié'
         c.stage_changed_at = datetime.utcnow()
+        if not c.prob_manual:
+            c.probabilite = _stage_default_prob('RDV qualifié')
     result_l = (data.get('result', '') or '').lower()
     _neg = ('pas signé', 'pas signe', 'non signé', 'non signe', 'refus', 'refuse', 'annulé', 'annule', 'pas d\'accord', 'pas accord')
     _pos = ('signé', 'signe', 'convention', 'accord')
     if any(w in result_l for w in _pos) and not any(n in result_l for n in _neg) and c.stage not in ('Signé', 'Déployé'):
         c.stage = 'Signé'
         c.stage_changed_at = datetime.utcnow()
+        if not c.prob_manual:
+            c.probabilite = _stage_default_prob('Signé')
     # Activity score boost
     score_boost = {'Email': 5, 'Appel': 8, 'RDV': 20, 'LinkedIn': 4, 'Relance': 3}.get(log_type, 3)
     c.score_activity = min(100, (c.score_activity or 20) + score_boost)
@@ -702,14 +734,20 @@ def api_mark_done(cid):
     if c.stage == 'Suspect':
         c.stage = 'Contact établi'
         c.stage_changed_at = datetime.utcnow()
+        if not c.prob_manual:
+            c.probabilite = _stage_default_prob('Contact établi')
     if c.action_type == 'RDV' and c.stage in ('Suspect', 'Contact établi') and not data.get('stage'):
         c.stage = 'RDV qualifié'
         c.stage_changed_at = datetime.utcnow()
+        if not c.prob_manual:
+            c.probabilite = _stage_default_prob('RDV qualifié')
     result_str = (data.get('result', '') or '').lower()
     _neg2 = ('pas signé', 'pas signe', 'non signé', 'non signe', 'refus', 'refuse', 'annulé', 'annule', 'pas d\'accord', 'pas accord')
     if any(w in result_str for w in ('signé', 'signe', 'convention', 'accord')) and not any(n in result_str for n in _neg2) and c.stage not in ('Signé', 'Déployé') and not data.get('stage'):
         c.stage = 'Signé'
         c.stage_changed_at = datetime.utcnow()
+        if not c.prob_manual:
+            c.probabilite = _stage_default_prob('Signé')
     # Activity score boost
     boost_map = {'Appel': 8, 'Email': 5, 'RDV': 20, 'LinkedIn': 5, 'Relance': 3}
     boost = boost_map.get(c.action_type, 5)
@@ -855,7 +893,6 @@ def api_set_goals():
 @app.route('/api/kanban')
 @login_required
 def api_kanban():
-    PROB = {'Suspect':.05,'Identifié':.10,'Contact établi':.20,'RDV qualifié':.35,'Proposition':.50,'Négociation':.75,'Signé':1.0,'Déployé':1.0}
     def vol(s):
         m = re.search(r'(\d[\d\s]*)', str(s))
         return int(m.group(1).replace(' ','')) if m else 0
@@ -863,10 +900,11 @@ def api_kanban():
     by_stage = {}
     for c in contacts:
         s = c.stage or 'Suspect'
+        prob_pct = c.probabilite if c.probabilite is not None else _stage_default_prob(s)
         if s not in by_stage: by_stage[s] = []
         by_stage[s].append({
             **c.to_dict(),
-            'pipeline_val': vol(c.deal_potential or '') * 3000 * PROB.get(s, .05)
+            'pipeline_val': vol(c.deal_potential or '') * 3000 * prob_pct / 100
         })
     return jsonify(by_stage)
 
@@ -945,7 +983,7 @@ def api_metrics():
 
     for c in contacts:
         vol = parse_vol(c.deal_potential or '')
-        prob = PROB.get(c.stage or 'Suspect', 0.05)
+        prob = (c.probabilite / 100) if c.probabilite is not None else PROB.get(c.stage or 'Suspect', 0.05)
         val = vol * REV * prob
         pipeline_total += val
         pipeline_by_sector[c.sector] = pipeline_by_sector.get(c.sector, 0) + val
@@ -1650,12 +1688,29 @@ def _auto_setup():
                 ('score_commercial', 'INTEGER DEFAULT 0'),
                 ('score_activity',   'INTEGER DEFAULT 20'),
                 ('data_quality',     'INTEGER DEFAULT 0'),
+                ('probabilite',      'INTEGER DEFAULT NULL'),
+                ('prob_manual',      'BOOLEAN DEFAULT FALSE'),
             ]:
                 try:
                     conn.execute(db.text(f'ALTER TABLE contact ADD COLUMN {col} {defn}'))
                     conn.commit()
                 except Exception:
                     pass
+            # Seed probabilite for contacts where it's NULL (based on their stage)
+            for stage, prob in _STAGE_PROB.items():
+                try:
+                    conn.execute(db.text(
+                        "UPDATE contact SET probabilite = :prob WHERE probabilite IS NULL AND stage = :stage"
+                    ), {'prob': prob, 'stage': stage})
+                    conn.commit()
+                except Exception:
+                    pass
+            # Catch-all for any remaining NULL (unknown stage)
+            try:
+                conn.execute(db.text("UPDATE contact SET probabilite = 5 WHERE probabilite IS NULL"))
+                conn.commit()
+            except Exception:
+                pass
             # Migrate old English stage values → MEDDIC French nomenclature
             for old, new in [
                 ('Prospect',    'Suspect'),

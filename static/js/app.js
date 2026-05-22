@@ -1073,6 +1073,11 @@ function openC(id) {
   `;
   document.getElementById('mo-poei').innerHTML=`<div class="pt">${esc(c.poei_offer||'Non défini')}</div><div class="ps">${esc(c.active_offers||'')} &nbsp;·&nbsp; ${esc(c.deal_potential||'')}</div>`;
   document.getElementById('mo-stage').value=c.stage||'Suspect';
+  const _probPct = c.probabilite != null ? c.probabilite : (STAGE_PROB_PCT[c.stage||'Suspect'] || 5);
+  const _probEl = document.getElementById('mo-prob');
+  if(_probEl) { _probEl.value = _probPct; }
+  const _autoEl = document.getElementById('mo-prob-auto');
+  if(_autoEl) { _autoEl.style.display = c.prob_manual ? 'none' : ''; }
   document.getElementById('mo-next').innerHTML=`${atTag(c.action_type)} <strong>${esc(c.next_action||'')}</strong><div style="margin-top:5px;font-size:11px;color:var(--mu)">Date prévue : ${c.next_action_date||'—'}</div>`;
   rLog();
   document.getElementById('mo-note').value='';
@@ -1118,9 +1123,16 @@ async function updStage(v) {
   if(!G.selId) return;
   const c = G.contacts.find(x=>x.id===G.selId);
   if(!c) return;
+  const patchData = {stage: v};
+  // Auto-suggest probability when stage changes (unless manually overridden)
+  if(!c.prob_manual) {
+    patchData.probabilite = STAGE_PROB_PCT[v] || 5;
+    const probEl = document.getElementById('mo-prob');
+    if(probEl) probEl.value = patchData.probabilite;
+  }
   const logEntry = {date: new Date().toLocaleString('fr-FR'), type:'Stage', result:`Stade → ${SL[v]||v}`};
   try {
-    const updated = await apiPatch(c.id, {stage: v});
+    const updated = await apiPatch(c.id, patchData);
     if(updated) {
       Object.assign(c, updated);
       c.log = c.log || [];
@@ -1132,6 +1144,26 @@ async function updStage(v) {
   }
   updSidebar();
   render();
+}
+
+async function updProb(v) {
+  if(!G.selId) return;
+  const prob = parseInt(v);
+  if(isNaN(prob) || prob < 0 || prob > 100) return;
+  const c = G.contacts.find(x=>x.id===G.selId);
+  if(!c) return;
+  try {
+    const updated = await apiPatch(c.id, {probabilite: prob, prob_manual: true});
+    if(updated) {
+      Object.assign(c, updated);
+      const autoEl = document.getElementById('mo-prob-auto');
+      if(autoEl) autoEl.style.display = 'none';
+      toast(`Probabilité → ${prob}%`, 'success');
+      render();
+    }
+  } catch(e) {
+    toast(e.message || 'Erreur mise à jour probabilité', 'error');
+  }
 }
 
 async function saveNote() {
@@ -1202,9 +1234,14 @@ function parseDeal(s) {
   const m = String(s||'').match(/(\d[\d\s]*)/);
   return m ? parseInt(m[1].replace(/\s/g,'')) : 0;
 }
+const STAGE_PROB_PCT = {Suspect:5,Identifié:10,'Contact établi':20,'RDV qualifié':35,Proposition:50,Négociation:75,Signé:100,Déployé:100};
+function contactProb(c) {
+  // Returns probability as 0-1 float. Uses per-contact probabilite if set, else stage default.
+  const pct = c.probabilite != null ? c.probabilite : (STAGE_PROB_PCT[c.stage||'Suspect'] || 5);
+  return pct / 100;
+}
 function pipelineValue(contacts) {
-  const PROB = {Suspect:.05,Identifié:.10,'Contact établi':.20,'RDV qualifié':.35,Proposition:.50,Négociation:.75,Signé:1,Déployé:1};
-  return contacts.reduce((sum,c)=>sum+parseDeal(c.deal_potential||'')*3000*(PROB[c.stage||'Suspect']||.05),0);
+  return contacts.reduce((sum,c)=>sum+parseDeal(c.deal_potential||'')*3000*contactProb(c),0);
 }
 function fmtEur(n) {
   if(n>=1000000) return (n/1000000).toFixed(1)+'M€';
@@ -1457,11 +1494,11 @@ function rKanban() {
     else byStage['Suspect'].push(c);
   });
 
-  // Weighted pipeline value per stage
+  // Weighted pipeline value per stage (using per-contact probability)
   const stageValues = {};
   KB_STAGES.forEach(s => {
     stageValues[s] = byStage[s].reduce((sum, c) =>
-      sum + parseDeal(c.deal_potential || '') * 3000 * (PROB[s] || .05), 0);
+      sum + parseDeal(c.deal_potential || '') * 3000 * contactProb(c), 0);
   });
   const totalPipeline = Object.values(stageValues).reduce((a, b) => a + b, 0);
 
@@ -1484,7 +1521,7 @@ function rKanban() {
     <div class="kb-metric">
       <div class="kb-metric-label">📊 Pipeline Pondéré</div>
       <div class="kb-metric-val" style="color:#7B2FBE">${fmtEur(totalPipeline)}</div>
-      <div class="kb-metric-pct" style="margin-top:8px">${G.contacts.length} entreprises · probabilité par stage</div>
+      <div class="kb-metric-pct" style="margin-top:8px">${G.contacts.length} entreprises · probabilité par deal</div>
     </div>
     <div class="kb-metric kb-metric-edit">
       <div class="kb-metric-label">⚙️ Objectifs</div>
@@ -1531,6 +1568,8 @@ function rKanban() {
 function kbCard(c, col) {
   const overdue = c.next_action_date && c.next_action_date < today();
   const sc = col || secColor(c.sector || '');
+  const probPct = c.probabilite != null ? c.probabilite : (STAGE_PROB_PCT[c.stage||'Suspect'] || 5);
+  const probBadge = `<span style="font-size:10px;font-weight:800;padding:1px 5px;border-radius:4px;background:${sc}22;color:${sc};border:1px solid ${sc}44">${probPct}%</span>`;
   return `<div class="kb-card" draggable="true"
     ondragstart="kbDragStart(event,${c.id})"
     ondragend="kbDragEnd(event)"
@@ -1539,7 +1578,7 @@ function kbCard(c, col) {
     <div class="kb-card-inner">
       <div class="kb-card-company">${esc(c.company)}</div>
       ${c.sector ? `<div class="kb-card-sector" style="color:${secColor(c.sector)}">${esc(c.sector)}</div>` : ''}
-      <div class="kb-card-tags">${segTag(c.segment)}${scoreTag(c.score)}</div>
+      <div class="kb-card-tags">${segTag(c.segment)}${scoreTag(c.score)}${probBadge}</div>
       ${c.next_action ? `<div class="kb-card-action">${esc(c.next_action.substring(0, 45))}</div>` : ''}
       ${overdue ? `<div class="kb-card-overdue">⚠️ EN RETARD</div>` : ''}
     </div>
@@ -1576,7 +1615,7 @@ async function kbDrop(e, newStage) {
   document.getElementById('content').innerHTML = rKanban();
   const res = await apiPatch(id, {stage: newStage});
   if(res) {
-    G.contacts = G.contacts.map(x => x.id===id ? {...x, stage: newStage} : x);
+    G.contacts = G.contacts.map(x => x.id===id ? {...x, ...res} : x);
     toast(`${esc(c.company)} → ${KB_LABELS[newStage]}`, 'success');
     const bdgToday = document.getElementById('bdg-today');
     if(bdgToday) updSidebar();
@@ -1813,7 +1852,7 @@ function rGrowthDashboard() {
   const secPipe = {};
   list.forEach(c=>{
     const s=c.sector||'Autre';
-    const val = parseDeal(c.deal_potential||'')*3000*({Suspect:.05,Identifié:.10,'Contact établi':.20,'RDV qualifié':.35,Proposition:.50,Négociation:.75,Signé:1,Déployé:1}[c.stage||'Suspect']||.05);
+    const val = parseDeal(c.deal_potential||'')*3000*contactProb(c);
     secPipe[s]=(secPipe[s]||0)+val;
   });
   const topSectors = Object.entries(secPipe).sort((a,b)=>b[1]-a[1]).slice(0,6);
@@ -2342,6 +2381,13 @@ function openContactForm(id=null) {
     sc.value = c.score||50;
     sc.style.setProperty('--pct',(c.score||50)+'%');
     document.getElementById('fd-score-val').textContent = c.score||50;
+    const _p = c.probabilite != null ? c.probabilite : (STAGE_PROB_PCT[c.stage||'Suspect']||5);
+    const probEl = document.getElementById('fd-prob');
+    if(probEl) { probEl.value=_p; probEl.style.setProperty('--pct',_p+'%'); }
+    const pvEl = document.getElementById('fd-prob-val');
+    if(pvEl) pvEl.textContent = _p;
+    const pmEl = document.getElementById('fd-prob-manual');
+    if(pmEl) pmEl.value = c.prob_manual ? 'true' : 'false';
     document.getElementById('fd-poei').value = c.poei_offer||'';
     document.getElementById('fd-offers').value = c.active_offers||'';
     document.getElementById('fd-deal').value = c.deal_potential||'';
@@ -2365,11 +2411,27 @@ function openContactForm(id=null) {
     const sc = document.getElementById('fd-score');
     sc.value = 50; sc.style.setProperty('--pct','50%');
     document.getElementById('fd-score-val').textContent = 50;
+    const probEl2 = document.getElementById('fd-prob');
+    if(probEl2) { probEl2.value=5; probEl2.style.setProperty('--pct','5%'); }
+    const pvEl2 = document.getElementById('fd-prob-val');
+    if(pvEl2) pvEl2.textContent = 5;
+    const pmEl2 = document.getElementById('fd-prob-manual');
+    if(pmEl2) pmEl2.value = 'false';
     document.getElementById('fd-action-date').value = new Date(Date.now()+3*86400000).toISOString().split('T')[0];
   }
 
   overlay.classList.add('show');
   drawer.classList.add('open');
+}
+
+function onFdStageChange(v) {
+  const manualEl = document.getElementById('fd-prob-manual');
+  if(manualEl && manualEl.value === 'true') return;
+  const suggested = STAGE_PROB_PCT[v] || 5;
+  const probEl = document.getElementById('fd-prob');
+  if(probEl) { probEl.value = suggested; probEl.style.setProperty('--pct', suggested+'%'); }
+  const pvEl = document.getElementById('fd-prob-val');
+  if(pvEl) pvEl.textContent = suggested;
 }
 
 function closeContactForm(e) {
@@ -2401,6 +2463,8 @@ async function saveContact() {
     stage: document.getElementById('fd-stage').value,
     priority: document.getElementById('fd-priority').value,
     score: parseInt(document.getElementById('fd-score').value),
+    probabilite: parseInt(document.getElementById('fd-prob')?.value || '0') || null,
+    prob_manual: document.getElementById('fd-prob-manual')?.value === 'true',
     poei_offer: document.getElementById('fd-poei').value.trim(),
     active_offers: document.getElementById('fd-offers').value.trim(),
     deal_potential: document.getElementById('fd-deal').value.trim(),

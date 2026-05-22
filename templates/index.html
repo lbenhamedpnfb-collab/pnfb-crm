@@ -244,6 +244,14 @@
           <option value="Signé">Signé ✓</option>
           <option value="Déployé">Déployé ✓✓</option>
         </select>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:10px">
+          <span style="font-size:12px;color:var(--mu);font-weight:600;min-width:130px">Probabilité closing :</span>
+          <input type="number" id="mo-prob" min="0" max="100" step="5"
+            style="width:64px;border:1.5px solid var(--bd);border-radius:6px;padding:4px 8px;font-size:13px;font-weight:700;color:var(--ac);background:var(--w);text-align:center"
+            oninput="updProb(this.value)">
+          <span style="font-size:12px;color:var(--mu)">%</span>
+          <span id="mo-prob-auto" style="font-size:10px;color:var(--mu);background:var(--bg);border-radius:4px;padding:2px 6px">auto</span>
+        </div>
       </div>
       <div class="mo-sec"><h4>Prochaine action planifiée</h4><div id="mo-next" style="background:var(--bg);border-radius:var(--r4);padding:11px;font-size:12.5px"></div></div>
       <div class="mo-sec" id="mo-scripts-sec" style="display:none">
@@ -395,7 +403,7 @@
       <div class="fd-grid-3">
         <div class="fd-field">
           <label>Stade Pipeline</label>
-          <select id="fd-stage">
+          <select id="fd-stage" onchange="onFdStageChange(this.value)">
             <option value="Suspect" selected>Suspect</option>
             <option value="Identifié">Identifié</option>
             <option value="Contact établi">Contact établi</option>
@@ -404,6 +412,12 @@
             <option value="Négociation">Négociation</option>
             <option value="Signé">Signé ✓</option>
           </select>
+        </div>
+        <div class="fd-field">
+          <label>Probabilité closing <span id="fd-prob-val" style="color:var(--ac);font-weight:900">5</span>%</label>
+          <input type="range" min="0" max="100" value="5" id="fd-prob" class="score-slider"
+            oninput="document.getElementById('fd-prob-val').textContent=this.value;this.style.setProperty('--pct',this.value+'%');document.getElementById('fd-prob-manual').value='true'">
+          <input type="hidden" id="fd-prob-manual" value="false">
         </div>
         <div class="fd-field">
           <label>Priorité</label>
