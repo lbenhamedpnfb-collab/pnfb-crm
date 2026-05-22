@@ -121,6 +121,8 @@ class Contact(db.Model):
     champion_interne     = db.Column(db.Text)
     concurrent_identifie = db.Column(db.Text)
     douleur_verbalisee   = db.Column(db.Text)
+    produit_type         = db.Column(db.String(100))
+    volume_recrutements  = db.Column(db.Integer)
     logs = db.relationship('ContactLog', backref='contact', lazy=True, cascade='all,delete-orphan')
     __table_args__ = (
         db.Index('ix_contact_archived_score', 'archived', 'score_commercial'),
@@ -166,6 +168,9 @@ class Contact(db.Model):
             'champion_interne': self.champion_interne or '',
             'concurrent_identifie': self.concurrent_identifie or '',
             'douleur_verbalisee': self.douleur_verbalisee or '',
+            'produit_type': self.produit_type or '',
+            'volume_recrutements': self.volume_recrutements,
+            'ca_estime': _ca_estime(self),
             'log': [l.to_dict() for l in self.logs],
         }
 
@@ -367,9 +372,18 @@ _STAGE_PROB = {
     'RDV qualifié': 35, 'Proposition': 50, 'Négociation': 75,
     'Signé': 100, 'Déployé': 100,
 }
+_PRODUIT_REVENUS = {
+    'POEI 400h': 6000, 'POEI 300h': 5400,
+    'Alternance CAP': 7500, 'Alternance Bac Pro': 8500, 'Alternance BTS': 9000,
+}
 
 def _stage_default_prob(stage):
     return _STAGE_PROB.get(stage or 'Suspect', 5)
+
+def _ca_estime(c):
+    if c.produit_type and c.volume_recrutements:
+        return _PRODUIT_REVENUS.get(c.produit_type, 0) * c.volume_recrutements
+    return None
 
 def compute_commercial_score(c):
     s = 0
@@ -594,7 +608,8 @@ def api_update_contact(cid):
                  'email','email_status','phone','decision_maker','poei_offer','active_offers',
                  'action_type','next_action','next_action_date','deal_potential','alert',
                  'linkedin','notes','owner_id','probabilite','prob_manual',
-                 'champion_interne','concurrent_identifie','douleur_verbalisee']
+                 'champion_interne','concurrent_identifie','douleur_verbalisee',
+                 'produit_type','volume_recrutements']
     segment_manually_set = 'segment' in data
     for field in UPDATABLE:
         if field in data:
@@ -909,9 +924,10 @@ def api_kanban():
         s = c.stage or 'Suspect'
         prob_pct = c.probabilite if c.probabilite is not None else _stage_default_prob(s)
         if s not in by_stage: by_stage[s] = []
+        _base = _ca_estime(c) if _ca_estime(c) is not None else vol(c.deal_potential or '') * 3000
         by_stage[s].append({
             **c.to_dict(),
-            'pipeline_val': vol(c.deal_potential or '') * 3000 * prob_pct / 100
+            'pipeline_val': _base * prob_pct / 100
         })
     return jsonify(by_stage)
 
@@ -989,9 +1005,10 @@ def api_metrics():
     score_sum = 0
 
     for c in contacts:
-        vol = parse_vol(c.deal_potential or '')
+        _ce = _ca_estime(c)
+        _base_m = _ce if _ce is not None else parse_vol(c.deal_potential or '') * REV
         prob = (c.probabilite / 100) if c.probabilite is not None else PROB.get(c.stage or 'Suspect', 0.05)
-        val = vol * REV * prob
+        val = _base_m * prob
         pipeline_total += val
         pipeline_by_sector[c.sector] = pipeline_by_sector.get(c.sector, 0) + val
         pipeline_by_stage[c.stage or 'Suspect'] = pipeline_by_stage.get(c.stage or 'Suspect', 0) + val
@@ -1511,8 +1528,9 @@ def api_forecast():
     for c in contacts:
         s = c.stage or 'Suspect'
         sec = (c.sector or 'Autre').replace('🧹 ','').replace('🏥 ','').replace('🏨 ','').replace('✈️ ','').replace('📦 ','').replace('🍽️ ','').replace('🏗️ ','').replace('👴 ','').replace('💼 ','').replace('🛒 ','').replace('🔷 ','')
-        vol = parse_vol(c.deal_potential)
-        val = vol * REV * PROB.get(s, 0.05)
+        _ce = _ca_estime(c)
+        _base_f = _ce if _ce is not None else parse_vol(c.deal_potential) * REV
+        val = _base_f * PROB.get(s, 0.05)
         by_stage[s] = by_stage.get(s, 0) + val
         by_sector[sec] = by_sector.get(sec, 0) + val
     goals = _load_goals()
@@ -1719,6 +1737,8 @@ def _auto_setup():
             ('champion_interne',     'TEXT DEFAULT NULL'),
             ('concurrent_identifie', 'TEXT DEFAULT NULL'),
             ('douleur_verbalisee',   'TEXT DEFAULT NULL'),
+            ('produit_type',         'VARCHAR(100) DEFAULT NULL'),
+            ('volume_recrutements',  'INTEGER DEFAULT NULL'),
         ]:
             _run_ddl(f'ALTER TABLE contact ADD COLUMN {_if_not} {col} {defn}')
 

@@ -463,6 +463,33 @@
     </div>
 
     <div class="fd-section">
+      <div class="fd-section-title">💰 Offre commerciale</div>
+      <div class="fd-grid">
+        <div class="fd-field">
+          <label>Type de produit</label>
+          <select id="f-produit-type" onchange="updateCaEstime()">
+            <option value="">-- Sélectionner --</option>
+            <option value="POEI 400h">POEI 400h — 6 000 €/recrutement</option>
+            <option value="POEI 300h">POEI 300h — 5 400 €/recrutement</option>
+            <option value="Alternance CAP">Alternance CAP — 7 500 €/an</option>
+            <option value="Alternance Bac Pro">Alternance Bac Pro — 8 500 €/an</option>
+            <option value="Alternance BTS">Alternance BTS — 9 000 €/an</option>
+          </select>
+        </div>
+        <div class="fd-field">
+          <label>Volume prévu (recrutements)</label>
+          <input type="number" id="f-volume-recrutements" min="1" placeholder="Ex : 20" oninput="updateCaEstime()">
+        </div>
+      </div>
+      <div class="fd-field fd-full">
+        <label>CA estimé (calculé automatiquement)</label>
+        <input type="text" id="f-ca-estime-display" readonly
+               style="background:#f0f9f0;color:#2d7a2d;font-weight:bold;border:1.5px solid #b2dfb2;"
+               placeholder="Sélectionner un produit et un volume">
+      </div>
+    </div>
+
+    <div class="fd-section">
       <div class="fd-section-title">Opportunité POEI</div>
       <div class="fd-grid">
         <div class="fd-field fd-full"><label>Offre POEI ciblée</label><input type="text" id="fd-poei" placeholder="POEI agents de propreté, aides-soignants…"></div>

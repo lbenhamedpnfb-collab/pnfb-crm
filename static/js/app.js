@@ -1077,7 +1077,13 @@ function openC(id) {
     <div class="info-item"><div class="ik">Décideur</div><div class="iv">${c.decision_maker?'✅ Oui':'Non'}</div></div>
     <div class="info-item"><div class="ik">LinkedIn</div><div class="iv">${c.linkedin?`<a href="${esc(c.linkedin)}" target="_blank">Voir le profil →</a>`:'—'}</div></div>
   `;
-  document.getElementById('mo-poei').innerHTML=`<div class="pt">${esc(c.poei_offer||'Non défini')}</div><div class="ps">${esc(c.active_offers||'')} &nbsp;·&nbsp; ${esc(c.deal_potential||'')}</div>`;
+  let _poeiHtml = `<div class="pt">${esc(c.poei_offer||'Non défini')}</div><div class="ps">${esc(c.active_offers||'')} &nbsp;·&nbsp; ${esc(c.deal_potential||'')}</div>`;
+  if(c.produit_type) {
+    _poeiHtml += `<div style="margin-top:8px">🏷️ <strong>${esc(c.produit_type)}</strong>`;
+    if(c.ca_estime != null) _poeiHtml += ` · <span style="color:green;font-weight:bold;">${c.ca_estime.toLocaleString('fr-FR')} €</span>`;
+    _poeiHtml += '</div>';
+  }
+  document.getElementById('mo-poei').innerHTML = _poeiHtml;
   // MEDDIC section
   const meddicEl = document.getElementById('mo-meddic');
   if(meddicEl) {
@@ -1252,13 +1258,20 @@ function parseDeal(s) {
   return m ? parseInt(m[1].replace(/\s/g,'')) : 0;
 }
 const STAGE_PROB_PCT = {Suspect:5,Identifié:10,'Contact établi':20,'RDV qualifié':35,Proposition:50,Négociation:75,Signé:100,Déployé:100};
+const PRODUIT_REVENUS = {
+  'POEI 400h': 6000, 'POEI 300h': 5400,
+  'Alternance CAP': 7500, 'Alternance Bac Pro': 8500, 'Alternance BTS': 9000
+};
 function contactProb(c) {
   // Returns probability as 0-1 float. Uses per-contact probabilite if set, else stage default.
   const pct = c.probabilite != null ? c.probabilite : (STAGE_PROB_PCT[c.stage||'Suspect'] || 5);
   return pct / 100;
 }
+function dealBase(c) {
+  return c.ca_estime != null ? c.ca_estime : parseDeal(c.deal_potential||'')*3000;
+}
 function pipelineValue(contacts) {
-  return contacts.reduce((sum,c)=>sum+parseDeal(c.deal_potential||'')*3000*contactProb(c),0);
+  return contacts.reduce((sum,c)=>sum+dealBase(c)*contactProb(c),0);
 }
 function fmtEur(n) {
   if(n>=1000000) return (n/1000000).toFixed(1)+'M€';
@@ -1515,7 +1528,7 @@ function rKanban() {
   const stageValues = {};
   KB_STAGES.forEach(s => {
     stageValues[s] = byStage[s].reduce((sum, c) =>
-      sum + parseDeal(c.deal_potential || '') * 3000 * contactProb(c), 0);
+      sum + dealBase(c) * contactProb(c), 0);
   });
   const totalPipeline = Object.values(stageValues).reduce((a, b) => a + b, 0);
 
@@ -1587,6 +1600,9 @@ function kbCard(c, col) {
   const sc = col || secColor(c.sector || '');
   const probPct = c.probabilite != null ? c.probabilite : (STAGE_PROB_PCT[c.stage||'Suspect'] || 5);
   const probBadge = `<span style="font-size:10px;font-weight:800;padding:1px 5px;border-radius:4px;background:${sc}22;color:${sc};border:1px solid ${sc}44">${probPct}%</span>`;
+  const produitLine = (c.produit_type && c.ca_estime != null)
+    ? `<div style="font-size:11px;color:#555;margin-top:4px;font-weight:600">🏷️ ${esc(c.produit_type)} · <span style="color:#2d7a2d">${c.ca_estime.toLocaleString('fr-FR')} €</span></div>`
+    : '';
   return `<div class="kb-card" draggable="true"
     ondragstart="kbDragStart(event,${c.id})"
     ondragend="kbDragEnd(event)"
@@ -1596,6 +1612,7 @@ function kbCard(c, col) {
       <div class="kb-card-company">${esc(c.company)}</div>
       ${c.sector ? `<div class="kb-card-sector" style="color:${secColor(c.sector)}">${esc(c.sector)}</div>` : ''}
       <div class="kb-card-tags">${segTag(c.segment)}${scoreTag(c.score)}${probBadge}</div>
+      ${produitLine}
       ${c.next_action ? `<div class="kb-card-action">${esc(c.next_action.substring(0, 45))}</div>` : ''}
       ${overdue ? `<div class="kb-card-overdue">⚠️ EN RETARD</div>` : ''}
     </div>
@@ -1871,7 +1888,7 @@ function rGrowthDashboard() {
   const secPipe = {};
   list.forEach(c=>{
     const s=c.sector||'Autre';
-    const val = parseDeal(c.deal_potential||'')*3000*contactProb(c);
+    const val = dealBase(c)*contactProb(c);
     secPipe[s]=(secPipe[s]||0)+val;
   });
   const topSectors = Object.entries(secPipe).sort((a,b)=>b[1]-a[1]).slice(0,6);
@@ -2418,6 +2435,9 @@ function openContactForm(id=null) {
       document.getElementById('meddic-fields').style.display='';
       document.getElementById('meddic-arrow').style.transform='rotate(90deg)';
     }
+    document.getElementById('f-produit-type').value = c.produit_type||'';
+    document.getElementById('f-volume-recrutements').value = c.volume_recrutements||'';
+    updateCaEstime();
     document.getElementById('fd-action-type').value = c.action_type||'Email';
     document.getElementById('fd-action-date').value = c.next_action_date||'';
     document.getElementById('fd-action-txt').value = c.next_action||'';
@@ -2431,6 +2451,9 @@ function openContactForm(id=null) {
      'fd-champion','fd-concurrent','fd-douleur'].forEach(id=>document.getElementById(id).value='');
     document.getElementById('meddic-fields').style.display='none';
     document.getElementById('meddic-arrow').style.transform='';
+    document.getElementById('f-produit-type').value = '';
+    document.getElementById('f-volume-recrutements').value = '';
+    document.getElementById('f-ca-estime-display').value = '';
     document.getElementById('fd-sector').value = '🧹 Propreté/FM';
     document.getElementById('fd-segment').value = 'Long Term';
     document.getElementById('fd-stage').value = 'Suspect';
@@ -2461,6 +2484,20 @@ function toggleMeddicSection() {
   const open = fields.style.display !== 'none';
   fields.style.display = open ? 'none' : '';
   if(arrow) arrow.style.transform = open ? '' : 'rotate(90deg)';
+}
+
+function updateCaEstime() {
+  const produit = document.getElementById('f-produit-type')?.value;
+  const volume = parseInt(document.getElementById('f-volume-recrutements')?.value) || 0;
+  const display = document.getElementById('f-ca-estime-display');
+  if(display) {
+    if(produit && volume > 0) {
+      const ca = (PRODUIT_REVENUS[produit] || 0) * volume;
+      display.value = ca.toLocaleString('fr-FR') + ' €';
+    } else {
+      display.value = '';
+    }
+  }
 }
 
 function onFdStageChange(v) {
@@ -2514,6 +2551,8 @@ async function saveContact() {
     champion_interne: document.getElementById('fd-champion').value.trim(),
     concurrent_identifie: document.getElementById('fd-concurrent').value.trim(),
     douleur_verbalisee: document.getElementById('fd-douleur').value.trim(),
+    produit_type: document.getElementById('f-produit-type').value,
+    volume_recrutements: parseInt(document.getElementById('f-volume-recrutements').value) || null,
     alert: _formContactId ? '' : '🔴 NOUVEAU',
   };
 
