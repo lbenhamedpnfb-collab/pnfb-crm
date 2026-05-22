@@ -277,6 +277,11 @@ def index():
     u = current_user()
     return render_template('index.html', user=u)
 
+@app.route('/terrain')
+@login_required
+def terrain_page():
+    return render_template('terrain.html')
+
 @app.route('/login')
 def login_page():
     if 'user_id' in session:
@@ -646,6 +651,8 @@ def api_add_log(cid):
     )
     db.session.add(log)
     c.last_activity_at = datetime.utcnow()
+    if data.get('next_action_date'):
+        c.next_action_date = data['next_action_date']
     log_type = data.get('type', '')
     # Auto-advance stage
     if c.stage == 'Suspect' and log_type in ('Email', 'Appel', 'LinkedIn'):

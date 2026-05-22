@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>📱 Mode Terrain — PNFB CRM</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; min-height: 100vh; }
+header { background: #1e293b; color: white; padding: 16px; font-size: 18px; font-weight: bold; text-align: center; position: sticky; top: 0; z-index: 10; }
+header a { color: #94a3b8; font-size: 13px; text-decoration: none; margin-left: 12px; }
+.contact-card { background: white; margin: 8px; padding: 16px; border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
+.card-top { display: flex; align-items: flex-start; margin-bottom: 10px; gap: 10px; }
+.score-badge { min-width: 32px; height: 32px; line-height: 32px; text-align: center; border-radius: 50%; font-size: 12px; font-weight: 800; background: #dbeafe; color: #1d4ed8; flex-shrink: 0; }
+.contact-name { font-size: 17px; font-weight: bold; line-height: 1.2; }
+.contact-company { color: #666; font-size: 13px; margin-top: 3px; }
+.stage-badge { display: inline-block; padding: 2px 7px; border-radius: 10px; font-size: 11px; font-weight: 700; }
+.card-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn-call { display: inline-block; background: #22c55e; color: white; padding: 12px 20px; border-radius: 8px; text-decoration: none; font-size: 15px; font-weight: 600; }
+.btn-log { background: #3b82f6; color: white; padding: 12px 20px; border-radius: 8px; border: none; font-size: 15px; font-weight: 600; cursor: pointer; }
+.next-hint { margin-top: 10px; font-size: 12px; color: #6b7280; padding: 8px 10px; background: #f9fafb; border-radius: 6px; border-left: 3px solid #e5e7eb; }
+.no-phone { padding: 12px 16px; background: #f3f4f6; border-radius: 8px; font-size: 13px; color: #9ca3af; }
+.overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.55); display: none; align-items: flex-end; z-index: 100; }
+.overlay.show { display: flex; }
+.log-panel { background: white; width: 100%; padding: 24px 20px 32px; border-radius: 16px 16px 0 0; max-height: 92vh; overflow-y: auto; }
+.log-panel h3 { font-size: 17px; font-weight: 800; margin-bottom: 2px; }
+.log-sub { color: #666; font-size: 13px; margin-bottom: 18px; }
+.field-label { font-size: 13px; font-weight: 700; color: #374151; display: block; margin-bottom: 8px; }
+.result-btns { display: flex; gap: 8px; margin-bottom: 18px; }
+.result-btn { flex: 1; padding: 13px 6px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 13px; cursor: pointer; background: white; text-align: center; transition: all .15s; }
+.result-btn.selected { border-color: #3b82f6; background: #eff6ff; font-weight: 700; }
+textarea { width: 100%; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px 12px; font-size: 15px; resize: none; font-family: inherit; margin-bottom: 16px; }
+textarea:focus { outline: none; border-color: #3b82f6; }
+.next-action-btns { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 20px; }
+.na-btn { padding: 9px 14px; border: 1px solid #e5e7eb; border-radius: 20px; font-size: 13px; cursor: pointer; background: white; transition: all .15s; }
+.na-btn.selected { background: #3b82f6; color: white; border-color: #3b82f6; font-weight: 600; }
+.btn-save { width: 100%; background: #22c55e; color: white; padding: 16px; border: none; border-radius: 10px; font-size: 17px; font-weight: bold; cursor: pointer; margin-top: 4px; }
+.btn-save:active { background: #16a34a; }
+.btn-cancel { width: 100%; background: #f3f4f6; color: #6b7280; padding: 13px; border: none; border-radius: 10px; font-size: 15px; cursor: pointer; margin-top: 8px; }
+.empty-state { text-align: center; padding: 60px 20px; color: #9ca3af; font-size: 15px; }
+.toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: #1e293b; color: white; padding: 12px 24px; border-radius: 10px; font-size: 14px; z-index: 200; box-shadow: 0 4px 12px rgba(0,0,0,0.3); transition: opacity .3s; white-space: nowrap; }
+.toast.error { background: #ef4444; }
+.counter { background: #1e293b; color: #94a3b8; text-align: center; padding: 8px; font-size: 12px; }
+</style>
+</head>
+<body>
+<header>
+  📱 Mode Terrain PNFB
+  <a href="/">← CRM</a>
+</header>
+
+<div id="counter" class="counter">Chargement…</div>
+<div id="cards"><div class="empty-state">Chargement des contacts…</div></div>
+
+<!-- ── OVERLAY LOG ── -->
+<div class="overlay" id="overlay" onclick="handleOverlayClick(event)">
+  <div class="log-panel">
+    <h3 id="log-name">—</h3>
+    <div class="log-sub" id="log-company">—</div>
+
+    <span class="field-label">Résultat de l'appel</span>
+    <div class="result-btns">
+      <button class="result-btn" data-r="Décroché"   onclick="selectResult(this)">✅ Décroché</button>
+      <button class="result-btn" data-r="Messagerie" onclick="selectResult(this)">📵 Messagerie</button>
+      <button class="result-btn" data-r="Injoignable" onclick="selectResult(this)">❌ Injoignable</button>
+    </div>
+
+    <span class="field-label">Note</span>
+    <textarea id="log-note" rows="2" placeholder="Ce qu'il a dit…"></textarea>
+
+    <span class="field-label">Prochaine relance</span>
+    <div class="next-action-btns">
+      <button class="na-btn" data-days="1"  onclick="selectNext(this)">Demain</button>
+      <button class="na-btn" data-days="3"  onclick="selectNext(this)">Dans 3 jours</button>
+      <button class="na-btn" data-days="7"  onclick="selectNext(this)">Dans 1 semaine</button>
+      <button class="na-btn" data-days=""   onclick="selectNext(this)">Autre</button>
+    </div>
+
+    <button class="btn-save" onclick="saveLog()">✅ Enregistrer</button>
+    <button class="btn-cancel" onclick="closeLog()">Annuler</button>
+  </div>
+</div>
+
+<script>
+let _currentId   = null;
+let _currentResult = null;
+let _nextDays    = null;
+
+function addDays(n) {
+  const d = new Date();
+  d.setDate(d.getDate() + n);
+  return d.toISOString().split('T')[0];
+}
+
+function esc(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function stageColor(s) {
+  const m = {
+    Suspect:'#94a3b8', Identifié:'#60a5fa', 'Contact établi':'#34d399',
+    'RDV qualifié':'#a78bfa', Proposition:'#fbbf24', Négociation:'#f97316',
+    Signé:'#22c55e', Déployé:'#10b981'
+  };
+  return m[s] || '#94a3b8';
+}
+
+function selectResult(btn) {
+  _currentResult = btn.dataset.r;
+  document.querySelectorAll('.result-btn').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+}
+
+function selectNext(btn) {
+  _nextDays = btn.dataset.days !== '' ? parseInt(btn.dataset.days) : null;
+  document.querySelectorAll('.na-btn').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+}
+
+function openLog(id) {
+  const c = (window._contacts || []).find(x => x.id === id);
+  if (!c) return;
+  _currentId     = id;
+  _currentResult = null;
+  _nextDays      = null;
+  document.getElementById('log-name').textContent    = c.name || c.company;
+  document.getElementById('log-company').textContent = c.company + ' · ' + (c.stage || 'Suspect');
+  document.getElementById('log-note').value          = '';
+  document.querySelectorAll('.result-btn').forEach(b => b.classList.remove('selected'));
+  document.querySelectorAll('.na-btn').forEach(b => b.classList.remove('selected'));
+  document.getElementById('overlay').classList.add('show');
+}
+
+function closeLog() {
+  document.getElementById('overlay').classList.remove('show');
+  _currentId = null;
+}
+
+function handleOverlayClick(e) {
+  if (e.target === document.getElementById('overlay')) closeLog();
+}
+
+async function saveLog() {
+  if (!_currentId)     { showToast('Aucun contact sélectionné', true); return; }
+  if (!_currentResult) { showToast('Sélectionner un résultat d\'appel', true); return; }
+
+  const note       = document.getElementById('log-note').value.trim();
+  const nextDate   = (_nextDays != null && _nextDays > 0) ? addDays(_nextDays) : null;
+  const payload    = {
+    type:             'Appel',
+    result:           _currentResult,
+    note:             note,
+    date:             new Date().toLocaleString('fr-FR'),
+    next_action_date: nextDate,
+  };
+
+  try {
+    const resp = await fetch('/api/contacts/' + _currentId + '/log', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(payload),
+    });
+    if (resp.status === 401) { window.location = '/login'; return; }
+    if (!resp.ok) throw new Error();
+    closeLog();
+    showToast('Log enregistré ✓');
+    loadContacts();           // refresh cards
+  } catch(e) {
+    showToast('Erreur lors de l\'enregistrement', true);
+  }
+}
+
+function showToast(msg, isError) {
+  const t = document.createElement('div');
+  t.className = 'toast' + (isError ? ' error' : '');
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 300); }, 2500);
+}
+
+async function loadContacts() {
+  try {
+    const resp = await fetch('/api/contacts');
+    if (resp.status === 401) { window.location = '/login'; return; }
+    const contacts = await resp.json();
+    window._contacts = contacts;
+
+    const active = contacts
+      .filter(c => !c.archived && !c.done)
+      .sort((a, b) => (b.score || 0) - (a.score || 0));
+
+    document.getElementById('counter').textContent =
+      active.length + ' contact' + (active.length > 1 ? 's' : '') + ' actif' + (active.length > 1 ? 's' : '');
+
+    const container = document.getElementById('cards');
+    if (!active.length) {
+      container.innerHTML = '<div class="empty-state">Aucun contact actif</div>';
+      return;
+    }
+
+    container.innerHTML = active.map(c => {
+      const sc = stageColor(c.stage);
+      const phone = (c.phone || '').replace(/\s/g, '');
+      return `
+        <div class="contact-card">
+          <div class="card-top">
+            <div class="score-badge">${c.score || 0}</div>
+            <div style="flex:1;min-width:0">
+              <div class="contact-name">${esc(c.name || '—')}</div>
+              <div class="contact-company">
+                ${esc(c.company)}
+                &nbsp;<span class="stage-badge" style="background:${sc}22;color:${sc}">${esc(c.stage || 'Suspect')}</span>
+              </div>
+            </div>
+          </div>
+          <div class="card-actions">
+            ${phone
+              ? `<a class="btn-call" href="tel:${phone}">📞 Appeler</a>`
+              : `<span class="no-phone">Pas de téléphone</span>`
+            }
+            <button class="btn-log" onclick="openLog(${c.id})">✏️ Logger résultat</button>
+          </div>
+          ${c.next_action
+            ? `<div class="next-hint">📋 ${esc(c.next_action.substring(0, 80))}${c.next_action_date ? ' — ' + c.next_action_date : ''}</div>`
+            : ''}
+        </div>`;
+    }).join('');
+  } catch(e) {
+    document.getElementById('cards').innerHTML = '<div class="empty-state">Erreur de chargement.<br><a href="/login">Se reconnecter</a></div>';
+  }
+}
+
+loadContacts();
+</script>
+</body>
+</html>
