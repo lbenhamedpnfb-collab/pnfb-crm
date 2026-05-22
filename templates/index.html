@@ -352,7 +352,8 @@
     <div class="fd-section">
       <div class="fd-section-title">Entreprise</div>
       <div class="fd-grid">
-        <div class="fd-field fd-full"><label>Entreprise *</label><input type="text" id="fd-company" placeholder="Nom de l'entreprise"></div>
+        <div class="fd-field fd-full"><label>Entreprise *</label><input type="text" id="fd-company" placeholder="Nom de l'entreprise" onblur="if(!_formContactId) checkCompanyCount(this.value)"></div>
+        <div id="company-count-banner" style="display:none;padding:10px;border-radius:8px;border:1px solid;margin-top:2px;font-size:13px;line-height:1.4" class="fd-full"></div>
         <div class="fd-field">
           <label>Secteur</label>
           <select id="fd-sector">

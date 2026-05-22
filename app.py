@@ -519,6 +519,22 @@ def _canonicalize_sector(s):
             return canon
     return s
 
+@app.route('/api/contacts/company-count')
+@login_required
+def api_company_count():
+    name = request.args.get('name', '').strip()
+    if not name or len(name) < 2:
+        return jsonify({'count': 0, 'contacts': []})
+    pattern = f'%{name}%'
+    matches = Contact.query.filter(
+        db.func.lower(Contact.company).like(db.func.lower(pattern)),
+        Contact.archived == False
+    ).all()
+    return jsonify({
+        'count': len(matches),
+        'contacts': [{'nom': c.name or c.company, 'fonction': c.title or ''} for c in matches]
+    })
+
 @app.route('/api/contacts', methods=['POST'])
 @login_required
 def api_create_contact():

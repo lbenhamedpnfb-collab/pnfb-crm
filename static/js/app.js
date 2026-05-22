@@ -2388,12 +2388,54 @@ async function deleteUser(id) {
 // ════════════════════════════════════════════════════════════════ CONTACT CRUD
 let _formContactId = null;
 
+async function checkCompanyCount(entreprise) {
+  const banner = document.getElementById('company-count-banner');
+  const saveBtn = document.getElementById('fd-save-btn');
+  if (!entreprise || entreprise.length < 2) {
+    if (banner) banner.style.display = 'none';
+    return;
+  }
+  try {
+    const res = await fetch('/api/contacts/company-count?name=' + encodeURIComponent(entreprise));
+    const data = await res.json();
+    if (!banner) return;
+    if (data.count >= 3) {
+      banner.innerHTML = '🚫 Limite atteinte — ' + esc(entreprise) + ' a déjà '
+        + data.count + ' contacts : '
+        + data.contacts.map(c => esc(c.nom)).join(', ')
+        + '. Modifie un contact existant.';
+      banner.style.background = '#fee2e2';
+      banner.style.borderColor = '#ef4444';
+      banner.style.color = '#991b1b';
+      banner.style.display = 'block';
+      if (saveBtn) saveBtn.disabled = true;
+    } else if (data.count === 2) {
+      banner.innerHTML = '⚠️ ' + esc(entreprise) + ' a déjà 2 contacts : '
+        + data.contacts.map(c => esc(c.nom)).join(', ')
+        + '. Es-tu sûr d\'en ajouter un 3e ?';
+      banner.style.background = '#fef3c7';
+      banner.style.borderColor = '#f59e0b';
+      banner.style.color = '#92400e';
+      banner.style.display = 'block';
+      if (saveBtn) saveBtn.disabled = false;
+    } else {
+      banner.style.display = 'none';
+      if (saveBtn) saveBtn.disabled = false;
+    }
+  } catch(e) { /* silently ignore network errors */ }
+}
+
 function openContactForm(id=null) {
   _formContactId = id;
   const drawer = document.getElementById('form-drawer');
   const overlay = document.getElementById('form-overlay');
   const title = document.getElementById('fd-title');
   const delBtn = document.getElementById('fd-del-btn');
+  // Always reset the company count banner and re-enable the save button
+  const _banner = document.getElementById('company-count-banner');
+  if (_banner) _banner.style.display = 'none';
+  const _saveBtn = document.getElementById('fd-save-btn');
+  if (_saveBtn) _saveBtn.disabled = false;
 
   if(id) {
     const c = G.contacts.find(x=>x.id===id);
