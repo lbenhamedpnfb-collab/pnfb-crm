@@ -71,6 +71,12 @@ except ImportError:
     limiter = None
     LIMITER_ENABLED = False
 
+@app.after_request
+def no_cache_api(response):
+    if request.path.startswith('/api/'):
+        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
+        response.headers['Pragma'] = 'no-cache'
+    return response
 
 # ─────────────────────────────────────────── MODELS
 
@@ -131,6 +137,8 @@ class Contact(db.Model):
     meddic_champion          = db.Column(db.Integer, default=0)
     meddic_competition       = db.Column(db.Integer, default=0)
     meddic_score             = db.Column(db.Integer, default=0)
+    apollo_person_id = db.Column(db.String(100), unique=True, nullable=True)
+    compte_id        = db.Column(db.Integer, db.ForeignKey('compte.id'), nullable=True)
     logs = db.relationship('ContactLog', backref='contact', lazy=True, cascade='all,delete-orphan')
     __table_args__ = (
         db.Index('ix_contact_archived_score', 'archived', 'score_commercial'),
@@ -187,6 +195,8 @@ class Contact(db.Model):
             'meddic_champion':          self.meddic_champion or 0,
             'meddic_competition':       self.meddic_competition or 0,
             'meddic_score':             self.meddic_score or 0,
+            'apollo_person_id': self.apollo_person_id or '',
+            'compte_id': self.compte_id,
             'log': [l.to_dict() for l in self.logs],
         }
 
@@ -268,6 +278,38 @@ class EmailTemplate(db.Model):
         }
 
 
+class Compte(db.Model):
+    """Compte prospect (entreprise) importé depuis Apollo / CRM de prospection."""
+    __tablename__ = 'compte'
+    id             = db.Column(db.Integer, primary_key=True)
+    raison_sociale = db.Column(db.String(200), nullable=False)
+    segment        = db.Column(db.String(100))
+    track          = db.Column(db.String(100))
+    taille         = db.Column(db.String(50))
+    ville          = db.Column(db.String(200))
+    site_web       = db.Column(db.String(500))
+    domaine        = db.Column(db.String(200))
+    ca_meur        = db.Column(db.Float)
+    score_icp      = db.Column(db.Integer, default=0)
+    apollo_org_id  = db.Column(db.String(100), unique=True, nullable=True)
+    statut         = db.Column(db.String(50), default='À contacter')
+    notes          = db.Column(db.Text)
+    created_at     = db.Column(db.DateTime, default=datetime.utcnow)
+    contacts       = db.relationship('Contact', backref='compte', lazy=True)
+
+    def to_dict(self):
+        return {
+            'id': self.id, 'raison_sociale': self.raison_sociale or '',
+            'segment': self.segment or '', 'track': self.track or '',
+            'taille': self.taille or '', 'ville': self.ville or '',
+            'site_web': self.site_web or '', 'domaine': self.domaine or '',
+            'ca_meur': self.ca_meur, 'score_icp': self.score_icp or 0,
+            'apollo_org_id': self.apollo_org_id or '',
+            'statut': self.statut or '', 'notes': self.notes or '',
+            'created_at': self.created_at.isoformat() if self.created_at else '',
+        }
+
+
 # ─────────────────────────────────────────── AUTH HELPERS
 
 def login_required(f):
@@ -278,6 +320,38 @@ def login_required(f):
                 return jsonify({'error': 'Non authentifié'}), 401
             return redirect(url_for('login_page'))
         return f(*args, **kwargs)
+    return decorated
+
+def api_auth_required(f):
+    """Accepte soit un cookie de session, soit Authorization: Bearer <API_KEY>."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        auth = request.headers.get('Authorization', '')
+        if auth.startswith('Bearer '):
+            token = auth[7:].strip()
+            api_key = os.environ.get('API_KEY', '')
+            if api_key and token == api_key:
+                return f(*args, **kwargs)
+        if 'user_id' in session:
+            return f(*args, **kwargs)
+        return jsonify({'error': 'Non authentifié'}), 401
+    return decorated
+
+def api_endpoint(f):
+    """CSRF-exempt + Bearer-or-session auth. À utiliser sur les routes POST/PATCH
+    qui doivent être accessibles par le script d'import (pas de navigateur)."""
+    inner = csrf.exempt(f) if csrf is not None else f
+    @wraps(inner)
+    def decorated(*args, **kwargs):
+        auth = request.headers.get('Authorization', '')
+        if auth.startswith('Bearer '):
+            token = auth[7:].strip()
+            api_key = os.environ.get('API_KEY', '')
+            if api_key and token == api_key:
+                return inner(*args, **kwargs)
+        if 'user_id' in session:
+            return inner(*args, **kwargs)
+        return jsonify({'error': 'Non authentifié'}), 401
     return decorated
 
 def current_user():
@@ -467,8 +541,17 @@ def _auto_segment(c):
     return 'Long Term'
 
 @app.route('/api/contacts')
-@login_required
+@api_auth_required
 def api_contacts():
+    # Lookup par clé d'idempotence (utilisé par le script d'import)
+    apollo_id = request.args.get('apollo_person_id')
+    if apollo_id:
+        c = Contact.query.filter_by(apollo_person_id=apollo_id).first()
+        return jsonify([c.to_dict()] if c else [])
+    email_q = request.args.get('email')
+    if email_q:
+        c = Contact.query.filter_by(email=email_q, archived=False).first()
+        return jsonify([c.to_dict()] if c else [])
     include_archived = request.args.get('include_archived', '0') == '1'
     if include_archived:
         contacts = Contact.query.all()
@@ -558,7 +641,7 @@ def api_company_count():
     })
 
 @app.route('/api/contacts', methods=['POST'])
-@login_required
+@api_endpoint
 def api_create_contact():
     data = request.get_json()
     _stage = data.get('stage','Suspect')
@@ -579,7 +662,9 @@ def api_create_contact():
         action_type=data.get('action_type','Email'), next_action=data.get('next_action',''),
         next_action_date=data.get('next_action_date',''), deal_potential=data.get('deal_potential',''),
         alert=data.get('alert',''), linkedin=data.get('linkedin',''), notes=data.get('notes',''),
-        done=False, probabilite=_prob, prob_manual=_prob_manual
+        done=False, probabilite=_prob, prob_manual=_prob_manual,
+        apollo_person_id=data.get('apollo_person_id') or None,
+        compte_id=data.get('compte_id') or None,
     )
     db.session.add(c)
     db.session.flush()
@@ -636,6 +721,77 @@ def api_export_contacts():
         headers={'Content-Disposition': 'attachment; filename=PNFB_CRM_Export.csv'}
     )
 
+# ─────────────────────────────────────────── COMPTES (prospects B2B)
+
+@app.route('/api/comptes')
+@api_auth_required
+def api_comptes():
+    apollo_id = request.args.get('apollo_org_id')
+    if apollo_id:
+        c = Compte.query.filter_by(apollo_org_id=apollo_id).first()
+        return jsonify([c.to_dict()] if c else [])
+    raison = request.args.get('raison_sociale')
+    if raison:
+        # SQLite LOWER() ne gère pas les accents → comparaison Python après fetch
+        candidates = Compte.query.filter(
+            Compte.raison_sociale.ilike(raison)
+        ).all()
+        if not candidates:
+            # Fallback : normalise accents pour comparaison robuste
+            import unicodedata
+            def _norm(s): return unicodedata.normalize('NFKD', s.casefold())
+            all_c = Compte.query.all()
+            candidates = [c for c in all_c if _norm(c.raison_sociale) == _norm(raison)]
+        c = candidates[0] if candidates else None
+        return jsonify([c.to_dict()] if c else [])
+    comptes = Compte.query.order_by(Compte.score_icp.desc()).all()
+    return jsonify([c.to_dict() for c in comptes])
+
+@app.route('/api/comptes', methods=['POST'])
+@api_endpoint
+def api_create_compte():
+    data = request.get_json()
+    c = Compte(
+        raison_sociale=data.get('raison_sociale', ''),
+        segment=data.get('segment', ''),
+        track=data.get('track', ''),
+        taille=data.get('taille', ''),
+        ville=data.get('ville', ''),
+        site_web=data.get('site_web', ''),
+        domaine=data.get('domaine', ''),
+        ca_meur=data.get('ca_meur') or None,
+        score_icp=int(data.get('score_icp', 0) or 0),
+        apollo_org_id=data.get('apollo_org_id') or None,
+        statut=data.get('statut', 'À contacter'),
+        notes=data.get('notes', ''),
+    )
+    db.session.add(c)
+    try:
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 409
+    return jsonify(c.to_dict()), 201
+
+@app.route('/api/comptes/<int:cid>', methods=['PATCH'])
+@api_endpoint
+def api_update_compte(cid):
+    c = Compte.query.get_or_404(cid)
+    data = request.get_json()
+    UPDATABLE = ['raison_sociale','segment','track','taille','ville','site_web',
+                 'domaine','ca_meur','score_icp','apollo_org_id','statut','notes']
+    for field in UPDATABLE:
+        if field in data:
+            setattr(c, field, data[field] or None if field in ('apollo_org_id',) else data[field])
+    try:
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 409
+    return jsonify(c.to_dict())
+
+# ─────────────────────────────────────────── CONTACTS (détail)
+
 @app.route('/api/contacts/<int:cid>', methods=['GET'])
 @login_required
 def api_contact(cid):
@@ -643,7 +799,7 @@ def api_contact(cid):
     return jsonify(c.to_dict())
 
 @app.route('/api/contacts/<int:cid>', methods=['PATCH'])
-@login_required
+@api_endpoint
 def api_update_contact(cid):
     c = Contact.query.get_or_404(cid)
     data = request.get_json()
@@ -655,14 +811,19 @@ def api_update_contact(cid):
                  'produit_type','volume_recrutements',
                  'meddic_metrics','meddic_economic_buyer','meddic_decision_criteria',
                  'meddic_decision_process','meddic_identify_pain',
-                 'meddic_champion','meddic_competition']
+                 'meddic_champion','meddic_competition',
+                 'apollo_person_id','compte_id']
     segment_manually_set = 'segment' in data
+    old_stage = c.stage
     for field in UPDATABLE:
         if field in data:
             val = _canonicalize_sector(data[field]) if field == 'sector' else data[field]
             setattr(c, field, val)
     if '_done' in data:
         c.done = bool(data['_done'])
+    # Track when stage changes
+    if 'stage' in data and data['stage'] != old_stage:
+        c.stage_changed_at = datetime.utcnow()
     # Auto-update probability when stage changes (unless probability was manually set)
     if 'stage' in data and 'probabilite' not in data and not c.prob_manual:
         c.probabilite = _stage_default_prob(data['stage'])
@@ -672,7 +833,11 @@ def api_update_contact(cid):
     _recompute_scores(c)
     if not segment_manually_set:
         c.segment = _auto_segment(c)
-    db.session.commit()
+    try:
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Erreur sauvegarde: {str(e)}'}), 500
     return jsonify(c.to_dict())
 
 @app.route('/api/contacts/<int:cid>/log', methods=['POST'])
@@ -1795,8 +1960,22 @@ def _auto_setup():
             ('meddic_champion',          'INTEGER DEFAULT 0'),
             ('meddic_competition',       'INTEGER DEFAULT 0'),
             ('meddic_score',             'INTEGER DEFAULT 0'),
+            ('apollo_person_id',         'VARCHAR(100) DEFAULT NULL'),
+            ('compte_id',                'INTEGER DEFAULT NULL'),
         ]:
             _run_ddl(f'ALTER TABLE contact ADD COLUMN {_if_not} {col} {defn}')
+
+        # Index UNIQUE partiel sur apollo_person_id (NULL exclus pour éviter conflits)
+        if _is_pg:
+            _run_ddl(
+                'CREATE UNIQUE INDEX IF NOT EXISTS uix_contact_apollo_person_id '
+                'ON contact(apollo_person_id) WHERE apollo_person_id IS NOT NULL'
+            )
+        else:
+            _run_ddl(
+                'CREATE UNIQUE INDEX IF NOT EXISTS uix_contact_apollo_person_id '
+                'ON contact(apollo_person_id) WHERE apollo_person_id IS NOT NULL'
+            )
 
         # Resync probabilite for all non-manual contacts to match their current stage.
         # Using prob_manual = FALSE (not just NULL) so contacts whose stage changed via
